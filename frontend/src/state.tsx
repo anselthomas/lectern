@@ -46,7 +46,9 @@ export function useApi<T = any>(path: string | null, deps: unknown[] = []) {
       setError(null);
       return d;
     } catch (e) {
-      setError(e);
+      // A failed background refresh (e.g. a brief deploy restart) keeps the last good data on screen.
+      if (quiet) console.warn("refresh failed, will retry", e);
+      else setError(e);
     } finally {
       setLoading(false);
     }

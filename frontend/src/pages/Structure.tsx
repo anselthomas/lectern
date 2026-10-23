@@ -78,6 +78,14 @@ export default function Structure() {
     catch (e) { setErr(e); } finally { setBusy(false); }
   };
 
+  const redetect = async () => {
+    const built = book.chapters?.some((c: any) => c.status === "ready");
+    if (!window.confirm(built ? "Detect the chapters again? Lessons and progress already built for this book will be rebuilt from scratch." : "Detect the chapters again from the PDF?")) return;
+    setBusy(true); setErr(null);
+    try { setData(await api(`/books/${bookId}/redetect`, { method: "POST" })); setDirty(false); reload(true); }
+    catch (e) { setErr(e); } finally { setBusy(false); }
+  };
+
   const chapterCount = rows.filter((r) => r.kind === "chapter").length;
   const appendices = rows.filter((r) => r.kind === "appendix").length;
   const first = book.chapters?.find((c: any) => c.kind === "chapter");
@@ -121,28 +129,32 @@ export default function Structure() {
             <div className="card stack gap-16">
               <div className="row between wrap gap-12">
                 <div className="stack gap-4"><h2>Check the chapters</h2><span className="muted">Rename, merge or fix page ranges. Lessons follow this outline.</span></div>
-                <div className="row gap-8"><button className="btn btn-sm btn-secondary" disabled={selected.length < 2} onClick={merge}>Merge</button><button className="btn btn-sm btn-secondary" disabled={selected.length !== 1} onClick={split}>Split</button></div>
+                <div className="row gap-8 wrap">
+                  <button className="btn btn-sm btn-secondary" disabled={selected.length < 2} onClick={merge} title="Select two or more rows to merge">Merge</button>
+                  <button className="btn btn-sm btn-secondary" disabled={selected.length !== 1} onClick={split} title="Select one row to split in half">Split</button>
+                  <button className="btn btn-sm btn-ghost" disabled={busy} onClick={redetect}>Detect chapters again</button>
+                </div>
               </div>
               {rows.some((r) => r.check_note) && <div className="alert alert-warn">{rows.filter((r) => r.check_note).length} item to check. {rows.find((r) => r.check_note)?.check_note}</div>}
               {issues.length > 0 && <div className="alert alert-error">{issues[0]}</div>}
               <div style={{ overflowX: "auto" }}>
                 <table className="table">
-                  <thead><tr><th><span className="hide-sm">Select</span></th><th>#</th><th>Title</th><th>Pages (PDF)</th><th>Type</th><th>Status</th></tr></thead>
+                  <thead><tr><th style={{ width: 36 }}><span className="sr-only">Select</span></th><th style={{ width: 32 }}>#</th><th>Title</th><th style={{ width: 210 }}>Pages (PDF)</th><th style={{ width: 128 }}>Type</th><th style={{ width: 120 }}>Status</th></tr></thead>
                   <tbody>{rows.map((r, i) => {
                     const built = book.chapters?.find((c: any) => c.id === r.key);
                     return (
                       <tr key={r.key} style={r.kind !== "chapter" && r.kind !== "appendix" ? { opacity: 0.6 } : undefined}>
                         <td><input type="checkbox" aria-label={`Select ${r.title}`} checked={!!r.sel} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, sel: e.target.checked } : x)))} /></td>
                         <td className="mono">{i + 1}</td>
-                        <td style={{ minWidth: 240 }}><input className="input" aria-label="Chapter title" value={r.title} onChange={(e) => edit(i, { title: e.target.value })} /></td>
+                        <td style={{ minWidth: 160 }}><input className="input" aria-label="Chapter title" value={r.title} onChange={(e) => edit(i, { title: e.target.value })} /></td>
                         <td><div className="row gap-4">
-                          <input className="input mono" style={{ width: 76 }} type="number" min={1} aria-label="Start page" value={r.pdf_start} onChange={(e) => edit(i, { pdf_start: +e.target.value })} />
+                          <input className="input mono" style={{ width: 64, padding: "0 8px" }} type="number" min={1} aria-label="Start page" value={r.pdf_start} onChange={(e) => edit(i, { pdf_start: +e.target.value })} />
                           <span>–</span>
-                          <input className="input mono" style={{ width: 76 }} type="number" min={1} aria-label="End page" value={r.pdf_end} onChange={(e) => edit(i, { pdf_end: +e.target.value })} />
+                          <input className="input mono" style={{ width: 64, padding: "0 8px" }} type="number" min={1} aria-label="End page" value={r.pdf_end} onChange={(e) => edit(i, { pdf_end: +e.target.value })} />
                           <button className="chip" onClick={() => setViewer(r.pdf_start)} aria-label={`Preview page ${r.pdf_start}`}>view</button>
                         </div></td>
-                        <td><select className="select" style={{ height: 40, width: 140 }} aria-label="Type" value={r.kind} onChange={(e) => edit(i, { kind: e.target.value })}>{kinds.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></td>
-                        <td>{r.check_note ? <span className="badge badge-warn">Check end page</span> : built?.status === "ready" ? <span className="badge badge-ok">Lessons ready</span> : ["queued", "building"].includes(built?.status) ? <span className="badge badge-accent"><Spinner />Building</span> : <span className="badge badge-muted">{r.kind === "chapter" || r.kind === "appendix" ? "Looks right" : "Skipped"}</span>}</td>
+                        <td><select className="select" style={{ height: 40, width: 120, padding: "0 8px" }} aria-label="Type" value={r.kind} onChange={(e) => edit(i, { kind: e.target.value })}>{kinds.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></td>
+                        <td>{r.check_note ? <span className="badge badge-warn" title={r.check_note ?? undefined}>Check</span> : built?.status === "ready" ? <span className="badge badge-ok">Ready</span> : ["queued", "building"].includes(built?.status) ? <span className="badge badge-accent"><Spinner />Building</span> : <span className="badge badge-muted">{r.kind === "chapter" || r.kind === "appendix" ? "Looks right" : "Skipped"}</span>}</td>
                       </tr>);
                   })}</tbody>
                 </table>

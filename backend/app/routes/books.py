@@ -225,6 +225,19 @@ def confirm(book_id: str, user: User = Depends(current_user), db: Session = Depe
     return book_summary(db, user, book, with_chapters=True)
 
 
+@router.post("/books/{book_id}/redetect")
+def redetect(book_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Run chapter detection again (after detection improvements, or if the outline looks wrong).
+    Replaces the outline, so lessons and progress for this book are rebuilt from scratch."""
+    book = own_book(db, user, book_id)
+    if book.status in ("uploading", "queued", "processing"):
+        raise HTTPException(409, "This book is already being processed")
+    book.status, book.status_detail, book.confirmed = "queued", "Finding the chapters again", False
+    jobs.enqueue(db, "ingest_book", book_id=book.id)
+    db.commit()
+    return book_summary(db, user, book)
+
+
 @router.delete("/books/{book_id}")
 def delete_book(book_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     book = own_book(db, user, book_id)

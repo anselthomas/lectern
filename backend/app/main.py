@@ -18,7 +18,7 @@ app = FastAPI(title="Lectern API", docs_url=None, redoc_url=None, openapi_url=No
 @app.middleware("http")
 async def origin_guard(request: Request, call_next):
     """Only CloudFront knows the origin secret; everything else is refused."""
-    if settings.origin_verify:
+    if settings.origin_verify and request.url.path != "/api/health":  # health is used by the container probe
         got = request.headers.get("x-origin-verify", "")
         if not hmac.compare_digest(got, settings.origin_verify):
             return JSONResponse({"error": "forbidden"}, status_code=403)

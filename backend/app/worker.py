@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import delete, insert
 
-from . import content, jobs, llm, pdf, vectors
+from . import content, jobs, llm, pdf, structure, vectors
 from .db import SessionLocal, engine
 from .limits import record_tokens
 from .models import Base, Book, Chapter, Chunk, Lesson, Notification, Page, Section, User
@@ -27,49 +27,15 @@ def notify(db, user_id, type_, title, body="", link=None):
 
 # ---------------------------------------------------------------- ingest
 
-CONTENTS_SCHEMA = {"type": "object", "required": ["chapters"], "properties": {"chapters": {
-    "type": "array", "items": {"type": "object", "required": ["title", "printed_page"], "properties": {
-        "title": {"type": "string"}, "printed_page": {"type": "integer"}}}}}}
-
-
-def chapters_from_contents(texts: list[str], labels: list[str | None], offset: int | None) -> list[pdf.ChapterSpec]:
-    """No bookmarks: ask the model to read the contents pages, then map printed pages to PDF pages."""
-    front = "\n".join(f'<page n="{i + 1}">\n{t[:4000]}\n</page>' for i, t in enumerate(texts[:25]))
-    data, _ = llm.call_json(
-        system="You read a book's table of contents and list its top-level chapters.",
-        prompt="List the top-level chapters (and appendices) from the contents page below with the printed page "
-               "number where each starts. If there is no contents page, return an empty list.\n\n" + front,
-        schema=CONTENTS_SCHEMA, tool_name="contents", max_tokens=2500, temperature=0)
-    entries = [e for e in data.get("chapters", []) if e.get("printed_page")]
-    if len(entries) < 2:
-        return []
-    n = len(texts)
-    starts = []
-    for e in entries:
-        p = None
-        if offset is not None:
-            p = int(e["printed_page"]) + offset
-        else:
-            # Find the page whose first lines contain the title, after the contents pages.
-            key = re.sub(r"\W+", " ", e["title"]).strip().lower()[:40]
-            for i in range(10, n):
-                head = re.sub(r"\W+", " ", " ".join(texts[i].splitlines()[:6])).lower()
-                if key and key in head:
-                    p = i + 1
-                    break
-        if p and 1 <= p <= n:
-            starts.append((p, e["title"]))
-    starts = sorted({p: t for p, t in starts}.items())
-    specs = []
-    for j, (p, title) in enumerate(starts):
-        end = starts[j + 1][0] - 1 if j + 1 < len(starts) else n
-        specs.append(pdf.ChapterSpec(title=title, pdf_start=p, pdf_end=max(p, end), kind=pdf.kind_for(title)))
-    return specs
+def book_exists(db, book_id) -> bool:
+    return db.get(Book, book_id) is not None
 
 
 def ingest_book(book_id: str) -> None:
     with SessionLocal() as db:
         book = db.get(Book, book_id)
+        if book is None:
+            return  # deleted before we got to it
         user = db.get(User, book.user_id)
         book.status, book.status_detail = "processing", "Reading the PDF"
         db.commit()
@@ -99,9 +65,9 @@ def ingest_book(book_id: str) -> None:
             return
 
         book.pages = doc.page_count
-        meta_title = (doc.metadata or {}).get("title") or ""
-        if meta_title.strip() and len(meta_title) > 3 and not meta_title.lower().endswith(".pdf"):
-            book.title = meta_title.strip()[:300]
+        meta_title = ((doc.metadata or {}).get("title") or "").strip()
+        if len(meta_title) > 3 and not pdf.junk_title(meta_title):
+            book.title = meta_title[:300]
         db.commit()
 
         texts, labels = [], []
@@ -132,13 +98,10 @@ def ingest_book(book_id: str) -> None:
                 if p >= 1:
                     db.query(Page).filter(Page.book_id == book.id, Page.pdf_page == i + 1).update({"label": str(p)})
 
-        specs = pdf.chapters_from_outline(doc)
-        book.structure_source = "bookmarks" if specs else None
-        if not specs:
-            book.status_detail = "Reading the contents page"
-            db.commit()
-            specs = chapters_from_contents(texts, labels, offset)
-            book.structure_source = "contents" if specs else None
+        book.status_detail = "Finding the chapters"
+        db.commit()
+        specs, source = structure.detect(doc, texts, offset)
+        book.structure_source = source
         doc.close()
 
         db.query(Chapter).filter(Chapter.book_id == book.id).delete()
@@ -146,13 +109,16 @@ def ingest_book(book_id: str) -> None:
             book.status, book.status_detail = "no_structure", "We couldn't find chapters in this PDF."
         else:
             for n, s in enumerate(specs, start=1):
+                if s.title == structure.WHOLE_DOCUMENT:
+                    s.title = book.title
                 db.add(Chapter(book_id=book.id, n=n, title=s.title[:300], kind=s.kind, pdf_start=s.pdf_start,
                                pdf_end=s.pdf_end, outline_children=s.children, check_note=s.check_note))
             book.status, book.status_detail = "review", None
             notify(db, book.user_id, "book_ready", f"{book.title}: chapters found",
                    f"We found {sum(1 for s in specs if s.kind == 'chapter')} chapters. Check them to start.",
                    f"/books/{book.id}/structure")
-        jobs.enqueue(db, "embed_book", book_id=book.id)
+        if book.embed_status != "done":  # a re-detect keeps the existing search index
+            jobs.enqueue(db, "embed_book", book_id=book.id)
         db.commit()
 
 
@@ -161,6 +127,8 @@ def ingest_book(book_id: str) -> None:
 def embed_book(book_id: str) -> None:
     with SessionLocal() as db:
         book = db.get(Book, book_id)
+        if book is None:
+            return
         book.embed_status, book.embedded_chunks = "running", 0
         db.commit()
         chapters = [(c.n, c.pdf_start, c.pdf_end) for c in db.query(Chapter).filter_by(book_id=book.id)]
@@ -190,6 +158,8 @@ def embed_book(book_id: str) -> None:
                               "book_id": str(book.id), "chapter_n": r["chapter_n"], "pdf_page": r["pdf_page"]}
                              for r, e in zip(batch, embs)])
                 done += len(batch)
+                if not book_exists(db, book.id):  # deleted mid-way; the delete already removed its vectors
+                    return
                 book.embedded_chunks = done
                 db.commit()
         book.embed_status = "done"
@@ -202,6 +172,8 @@ def embed_book(book_id: str) -> None:
 def build_chapter(chapter_id: str, level: str = "standard") -> None:
     with SessionLocal() as db:
         ch = db.get(Chapter, chapter_id)
+        if ch is None:
+            return
         book = db.get(Book, ch.book_id)
         user = db.get(User, book.user_id)
         ch.status, ch.status_detail = "building", None
@@ -225,6 +197,8 @@ def build_lesson(section_id: str, level: str) -> None:
     """A lesson at a level the chapter wasn't built at (the learner switched level). Interactive tier."""
     with SessionLocal() as db:
         sec = db.get(Section, section_id)
+        if sec is None:
+            return
         ch = db.get(Chapter, sec.chapter_id)
         book = db.get(Book, ch.book_id)
         if db.query(Lesson).filter_by(section_id=sec.id, level=level).first():

@@ -10,6 +10,15 @@ FRONT_MATTER = re.compile(r"^(preface|contents|table of contents|foreword|acknow
 APPENDIX = re.compile(r"^appendix\b", re.I)
 
 
+JUNK_TITLE = re.compile(
+    r"(\.(pdf|pmd|p65|indd|qxd|docx?|rtf|txt)$)|(^(page|pg\.?|p\.)\s*[\divx]+$)|(^untitled\b)|(^microsoft word\b)|(^[\d\s.\-_]+$)",
+    re.I)
+
+
+def junk_title(title: str) -> bool:
+    return not title.strip() or bool(JUNK_TITLE.search(title.strip()))
+
+
 @dataclass
 class ChapterSpec:
     title: str
@@ -26,6 +35,14 @@ def open_pdf(path: str, password: str | None = None) -> fitz.Document:
         if not password or not doc.authenticate(password):
             doc.close()
             raise PermissionError("password required")
+    return doc
+
+
+def open_pdf_bytes(data: bytes, password: str | None = None) -> fitz.Document:
+    doc = fitz.open(stream=data, filetype="pdf")
+    if doc.needs_pass and (not password or not doc.authenticate(password)):
+        doc.close()
+        raise PermissionError("password required")
     return doc
 
 
@@ -65,7 +82,7 @@ def kind_for(title: str) -> str:
 def chapters_from_outline(doc: fitz.Document) -> list[ChapterSpec]:
     # Drop junk entries some exporters add, like a bookmark named after the file itself.
     toc = [(lvl, title.strip(), page) for lvl, title, page in doc.get_toc(simple=True)
-           if page and page > 0 and title.strip() and not title.strip().lower().endswith(".pdf")]
+           if page and page > 0 and not junk_title(title)]
     if not toc:
         return []
     levels = Counter(lvl for lvl, _, _ in toc)
@@ -110,9 +127,15 @@ def detect_offset(labels: list[str | None], texts: list[str]) -> int | None:
     votes: Counter = Counter()
     for i, text in enumerate(texts):
         lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
-        for cand in lines[:2] + lines[-2:]:
-            if re.fullmatch(r"\d{1,4}", cand):
-                votes[(i + 1) - int(cand)] += 1
+        page_votes = set()
+        for cand in lines[:3] + lines[-3:]:
+            for m in (re.fullmatch(r"(\d{1,4})", cand),
+                      re.match(r"(\d{1,4})\s+(?=[A-Za-z\u2022|\d])", cand),      # "10 1 â€¢ Welcome to Economics!"
+                      re.search(r"(?<=[A-Za-z)!?.:\u2022|])\s+(\d{1,4})$", cand)):  # "... Why Is It Important? 11"
+                if m:
+                    page_votes.add((i + 1) - int(m.group(1)))
+        for k in page_votes:
+            votes[k] += 1
     if not votes:
         return None
     k, count = votes.most_common(1)[0]
@@ -141,3 +164,67 @@ def chunk_page(text: str, max_chars: int = 1600) -> list[str]:
 
 def render_png(doc: fitz.Document, pdf_page: int, zoom: float = 1.6) -> bytes:
     return doc[pdf_page - 1].get_pixmap(matrix=fitz.Matrix(zoom, zoom)).tobytes("png")
+
+
+def outline_usable(specs: list[ChapterSpec], page_count: int) -> bool:
+    """Bookmarks are only trusted if they describe a real chapter structure."""
+    learn = [c for c in specs if c.kind in ("chapter", "appendix")]
+    if len(learn) < 2:
+        return False
+    if max(c.pdf_end - c.pdf_start + 1 for c in learn) > 0.6 * page_count:
+        return False
+    titles = [c.title.lower() for c in learn]
+    return len(set(titles)) >= 0.7 * len(titles)
+
+
+def heading_title(text: str) -> str | None:
+    """A plausible chapter title from the first lines of its opening page."""
+    for line in [l.strip() for l in text.splitlines() if l.strip()][:8]:
+        if len(line) >= 4 and re.search(r"[A-Za-z]{3}", line) and not re.fullmatch(r"[\divxlc.\-\s]+", line, re.I):
+            return line[:120]
+    return None
+
+
+def chapters_from_bookmark_positions(doc: fitz.Document, texts: list[str]) -> list[ChapterSpec]:
+    """Bookmarks with useless titles (e.g. source file names) still mark where chapters start."""
+    raw = [(lvl, page) for lvl, _, page in doc.get_toc(simple=True) if page and page > 0]
+    if not raw:
+        return []
+    top = min(lvl for lvl, _ in raw)
+    starts = sorted({p for lvl, p in raw if lvl == top})
+    if len(starts) < 3:
+        return []
+    specs = []
+    for j, start in enumerate(starts):
+        end = starts[j + 1] - 1 if j + 1 < len(starts) else doc.page_count
+        title = heading_title(texts[start - 1]) or f"Part {j + 1}"
+        specs.append(ChapterSpec(title=title, pdf_start=start, pdf_end=max(start, end), kind=kind_for(title),
+                                 check_note="Title taken from the first line of the page — check it."))
+    return specs
+
+
+CHAPTER_HEAD = re.compile(r"^\s*(chapter|unit|lesson|part)\s*[-:.]?\s*(\d+|[ivxlc]+)\b[\s:.\-]*(.*)$", re.I)
+
+
+def chapters_from_headings(texts: list[str]) -> list[ChapterSpec]:
+    """Pages whose first lines start with 'Chapter N' (or Unit/Lesson/Part)."""
+    found = []
+    for i, text in enumerate(texts):
+        lines = [l.strip() for l in text.splitlines() if l.strip()][:3]
+        for k, line in enumerate(lines):
+            m = CHAPTER_HEAD.match(line)
+            if m:
+                rest = m.group(3).strip() or (lines[k + 1] if k + 1 < len(lines) else "")
+                found.append((i + 1, f"{m.group(1).title()} {m.group(2)}{': ' + rest if rest else ''}"[:200]))
+                break
+    # Ignore repeats (running headers) by keeping the first page for each title.
+    seen, starts = set(), []
+    for p, t in found:
+        key = t.lower()
+        if key not in seen:
+            seen.add(key)
+            starts.append((p, t))
+    if len(starts) < 3:
+        return []
+    return [ChapterSpec(title=t, pdf_start=p, pdf_end=(starts[j + 1][0] - 1 if j + 1 < len(starts) else len(texts)))
+            for j, (p, t) in enumerate(starts)]
