@@ -27,8 +27,33 @@ def grant_internal(email: str) -> None:
     print(f"{email}: plan=internal, limits_exempt=true")
 
 
+def reset_user(email: str) -> None:
+    """Delete a user's books (S3 file, vectors, cache) and learning history, keeping the account itself."""
+    from sqlalchemy import func
+
+    from . import vectors
+    from .models import Book, Card, ChatMessage, Chunk, Notification, Note, Review, StudyDay, UsageMonthly
+    from .storage import delete_object, drop_local
+
+    with SessionLocal() as db:
+        user = db.query(User).filter_by(email=email).one()
+        for book in db.query(Book).filter_by(user_id=user.id):
+            n = db.query(func.count(Chunk.id)).filter(Chunk.book_id == book.id).scalar()
+            vectors.delete_book(str(book.id), n)
+            delete_object(book.s3_key)
+            drop_local(book.id)
+            db.delete(book)
+        for model in (Review, Card, ChatMessage, Note, Notification, StudyDay, UsageMonthly):
+            db.query(model).filter(model.user_id == user.id).delete()
+        user.onboarded = False
+        db.commit()
+    print(f"{email}: books and history removed")
+
+
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "grant-internal":
         grant_internal(sys.argv[2])
+    elif len(sys.argv) == 3 and sys.argv[1] == "reset-user":
+        reset_user(sys.argv[2])
     else:
-        sys.exit("usage: python -m app.admin grant-internal EMAIL")
+        sys.exit("usage: python -m app.admin grant-internal|reset-user EMAIL")
