@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from botocore.exceptions import ClientError
 
 from .aws import bedrock
+from . import telemetry
 from .config import settings
 
 log = logging.getLogger("lectern.llm")
@@ -78,24 +79,46 @@ def call_json(
                 return bedrock().converse(**request)
             raise
 
-    resp = _with_retries(run)
+    started = time.time()
+    try:
+        resp = _with_retries(run)
+    except Exception as e:
+        telemetry.record_call(kind=tool_name, model=settings.text_model, tier=_tier(request), ok=False,
+                              latency_ms=int((time.time() - started) * 1000), error=f"{type(e).__name__}: {e}")
+        raise
     usage = Usage(resp["usage"]["inputTokens"], resp["usage"]["outputTokens"])
-    for block in resp["output"]["message"]["content"]:
-        if "toolUse" in block:
-            data = block["toolUse"]["input"]
-            if isinstance(data, str):
-                data = json.loads(data)
-            return data, usage
+    tool_use = next((b["toolUse"] for b in resp["output"]["message"]["content"] if "toolUse" in b), None)
+    telemetry.record_call(kind=tool_name, model=settings.text_model, tier=_tier(request), tokens_in=usage.tokens_in,
+                          tokens_out=usage.tokens_out, latency_ms=int((time.time() - started) * 1000),
+                          ok=tool_use is not None, error=None if tool_use else f"no structured output ({resp.get('stopReason')})")
+    if tool_use is not None:
+        data = tool_use["input"]
+        if isinstance(data, str):
+            data = json.loads(data)
+        return data, usage
     text = " ".join(b.get("text", "") for b in resp["output"]["message"]["content"])
     raise LLMError(f"model did not return structured output (stop={resp.get('stopReason')}): {text[:300]}")
 
 
-def embed(text: str) -> list[float]:
+def _tier(request: dict) -> str:
+    return request.get("serviceTier", {}).get("type", "standard")
+
+
+def embed(text: str, counter: "telemetry.EmbedCounter | None" = None) -> list[float]:
+    """Titan embedding. With a counter, usage is summed for one batch row; otherwise recorded per call."""
     body = json.dumps({"inputText": text[:30000], "dimensions": 1024, "normalize": True})
 
     def run():
         return bedrock().invoke_model(modelId=settings.embed_model, body=body,
                                       contentType="application/json", accept="application/json")
 
+    started = time.time()
     resp = _with_retries(run)
-    return json.loads(resp["body"].read())["embedding"]
+    data = json.loads(resp["body"].read())
+    tokens = int(data.get("inputTextTokenCount") or 0)
+    if counter is not None:
+        counter.add(tokens)
+    else:
+        telemetry.record_call(kind="embed", model=settings.embed_model, tokens_in=tokens,
+                              cost=telemetry.embed_cost(tokens), latency_ms=int((time.time() - started) * 1000))
+    return data["embedding"]

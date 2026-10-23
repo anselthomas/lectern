@@ -17,6 +17,7 @@ from ..config import settings
 from ..db import get_db
 from ..limits import check_voice
 from ..models import User
+from .. import telemetry
 
 router = APIRouter(prefix="/api")
 MAX_BYTES = 10 * 1024 * 1024
@@ -61,6 +62,11 @@ def transcribe_audio(audio: UploadFile = File(...), user: User = Depends(current
             raise HTTPException(502, {"code": "transcription_failed", "message": f"We couldn't transcribe that ({reason}). Try again or type instead."})
         result = json.loads(s3().get_object(Bucket=bucket, Key=out_key)["Body"].read())
         text = " ".join(t["transcript"] for t in result["results"]["transcripts"]).strip()
+        seconds = max((float(i.get("end_time", 0)) for i in result["results"].get("items", [])), default=0.0)
+        with telemetry.scope(user_id=user.id, feature="voice"):
+            telemetry.record_call(kind="transcribe", model="amazon-transcribe", units=round(seconds, 1),
+                                  cost=telemetry.transcribe_cost(seconds))
+            telemetry.event("voice_clip", seconds=round(seconds, 1), language=info.get("LanguageCode"), words=len(text.split()))
         row.voice_clips += 1
         db.commit()
         return {"text": text, "language": info.get("LanguageCode")}

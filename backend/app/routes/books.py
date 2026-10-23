@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .. import jobs, pdf, vectors
+from .. import jobs, pdf, telemetry, vectors
 from ..auth import current_user
 from ..aws import s3
 from ..config import settings
@@ -95,6 +95,7 @@ def create_book(body: NewBook, user: User = Depends(current_user), db: Session =
     book.s3_key = f"users/{user.id}/books/{book.id}/source.pdf"
     usage_row(db, user).books_added += 1
     db.commit()
+    telemetry.event("book_uploaded", user_id=user.id, book_id=book.id, bytes=body.size, filename=body.filename[:120])
     return {"book": book_summary(db, user, book), "upload_url": presign_put(book.s3_key)}
 
 

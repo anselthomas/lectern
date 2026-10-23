@@ -86,6 +86,7 @@ export function TopNav() {
               <hr className="divider" />
               <Link role="menuitem" to="/progress" onClick={() => setOpen(false)}>Progress</Link>
               <Link role="menuitem" to="/settings" onClick={() => setOpen(false)}>Settings & billing</Link>
+              {me?.is_admin && <Link role="menuitem" to="/admin" onClick={() => setOpen(false)}>Admin dashboard</Link>}
               <Link role="menuitem" to="/help" onClick={() => setOpen(false)}>Help & contact</Link>
               <hr className="divider" />
               <button role="menuitem" onClick={() => { signOut(); nav("/"); window.location.reload(); }}>Sign out</button>

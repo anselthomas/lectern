@@ -36,6 +36,8 @@ class User(Base):
     name: Mapped[str | None] = mapped_column(String(120))
     plan_id: Mapped[str] = mapped_column(ForeignKey("plans.id"), default="free")
     limits_exempt: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     onboarded: Mapped[bool] = mapped_column(Boolean, default=False)
     goal: Mapped[str | None] = mapped_column(String(40))
     level_default: Mapped[str] = mapped_column(String(10), default="standard")
@@ -260,4 +262,40 @@ class Job(Base):
     run_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class LlmCall(Base):
+    """One model call (or one batch of embeddings), with tokens and estimated cost."""
+    __tablename__ = "llm_calls"
+    __table_args__ = (Index("ix_llm_calls_created", "created_at"), Index("ix_llm_calls_user", "user_id", "created_at"))
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    book_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("books.id", ondelete="SET NULL"))
+    chapter_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("chapters.id", ondelete="SET NULL"))
+    feature: Mapped[str] = mapped_column(String(30))   # chapter_build | lesson_level | tutor | explain | quiz_grading | ...
+    kind: Mapped[str] = mapped_column(String(30))      # chapter_map | lesson | quiz | reply | grade | embed | transcribe ...
+    model: Mapped[str] = mapped_column(String(80))
+    tier: Mapped[str] = mapped_column(String(10), default="standard")
+    calls: Mapped[int] = mapped_column(Integer, default=1)
+    tokens_in: Mapped[int] = mapped_column(BigInteger, default=0)
+    tokens_out: Mapped[int] = mapped_column(BigInteger, default=0)
+    units: Mapped[float | None] = mapped_column(Float)  # e.g. audio seconds for transcription
+    cost_usd: Mapped[float] = mapped_column(Float, default=0)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Event(Base):
+    """Product analytics: what learners do (uploads, sections completed, quiz scores, reviews...)."""
+    __tablename__ = "events"
+    __table_args__ = (Index("ix_events_created", "created_at"), Index("ix_events_type", "type", "created_at"))
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    book_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("books.id", ondelete="SET NULL"))
+    chapter_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("chapters.id", ondelete="SET NULL"))
+    type: Mapped[str] = mapped_column(String(40))
+    props: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

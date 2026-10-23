@@ -23,6 +23,9 @@ class Settings:
     database_url: str = field(default_factory=lambda: _env("DATABASE_URL", "postgresql+psycopg://lectern:lectern@localhost/lectern"))
     origin_verify: str = field(default_factory=lambda: _env("ORIGIN_VERIFY", ""))
     cache_dir: str = field(default_factory=lambda: _env("CACHE_DIR", "/data/cache"))
+    # Comma-separated emails that get the admin dashboard (set from SSM /lectern/admin-emails at deploy).
+    admin_emails: frozenset = field(default_factory=lambda: frozenset(
+        e.strip().lower() for e in _env("ADMIN_EMAILS", "").split(",") if e.strip()))
     # Background chapter builds use Bedrock's cheaper flex tier; interactive calls use the default tier.
     build_service_tier: str = field(default_factory=lambda: _env("BUILD_SERVICE_TIER", "flex"))
 

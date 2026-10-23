@@ -10,6 +10,9 @@ STATEMENTS = [
     "ALTER TABLE notes ALTER COLUMN kind TYPE varchar(20)",
     # 2026-10-24: voice answers (Amazon Transcribe) are metered per clip.
     "ALTER TABLE usage_monthly ADD COLUMN IF NOT EXISTS voice_clips integer NOT NULL DEFAULT 0",
+    # 2026-10-24: admin dashboard.
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin boolean NOT NULL DEFAULT false",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at timestamptz",
 ]
 
 

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, insert, text
 from sqlalchemy.exc import IntegrityError
 
-from . import content, jobs, llm, migrations, pdf, structure, vectors
+from . import content, jobs, llm, migrations, pdf, structure, telemetry, vectors
 from .db import SessionLocal, engine
 from .limits import record_tokens
 from .models import Base, Book, Chapter, Chunk, Lesson, Notification, Page, Section, User
@@ -103,7 +103,8 @@ def ingest_book(book_id: str) -> None:
 
         book.status_detail = "Finding the chapters"
         db.commit()
-        specs, source = structure.detect(doc, texts, offset)
+        with telemetry.scope(user_id=book.user_id, book_id=book.id, feature="ingest"):
+            specs, source = structure.detect(doc, texts, offset)
         book.structure_source = source
         doc.close()
 
@@ -123,6 +124,8 @@ def ingest_book(book_id: str) -> None:
         if book.embed_status != "done":  # a re-detect keeps the existing search index
             jobs.enqueue(db, "embed_book", book_id=book.id)
         db.commit()
+        telemetry.event("book_processed", user_id=book.user_id, book_id=book.id, pages=book.pages, kind=book.kind,
+                        structure=source, chapters=sum(1 for s in specs if s.kind == "chapter"), status=book.status)
 
 
 # ---------------------------------------------------------------- embeddings
@@ -138,7 +141,8 @@ def embed_book(book_id: str) -> None:
             return
         book = db.get(Book, book_id)
         try:
-            _embed(db, book)
+            with telemetry.scope(user_id=book.user_id, book_id=book.id, feature="embed"):
+                _embed(db, book)
         except Exception:
             db.rollback()
             db.execute(text("UPDATE books SET embed_status = 'failed' WHERE id = :id"), {"id": book_id})
@@ -166,10 +170,12 @@ def _embed(db, book: Book) -> None:
     db.commit()
 
     done = 0
+    counter = telemetry.EmbedCounter()
+    started = telemetry.now()
     with cf.ThreadPoolExecutor(max_workers=6) as pool:
         for i in range(0, len(rows), 200):
             batch = rows[i:i + 200]
-            embs = list(pool.map(lambda r: llm.embed(r["text"]), batch))
+            embs = list(pool.map(lambda r: llm.embed(r["text"], counter), batch))
             vectors.put([{"key": f"{book.id}:{r['n']}", "embedding": e, "user_id": str(book.user_id),
                           "book_id": str(book.id), "chapter_n": r["chapter_n"], "pdf_page": r["pdf_page"]}
                          for r, e in zip(batch, embs)])
@@ -178,6 +184,9 @@ def _embed(db, book: Book) -> None:
                 return
             book.embedded_chunks = done
             db.commit()
+    telemetry.record_call(kind="embed", model=llm.settings.embed_model, calls=counter.calls, tokens_in=counter.tokens,
+                          cost=telemetry.embed_cost(counter.tokens),
+                          latency_ms=int((telemetry.now() - started).total_seconds() * 1000))
     book.embed_status = "done"
     db.commit()
     log.info("embedded %s chunks for %s", done, book.id)
@@ -198,7 +207,8 @@ def build_chapter(chapter_id: str, level: str = "standard") -> None:
         book = db.get(Book, ch.book_id)
         user = db.get(User, book.user_id)
         try:
-            usage = content.build_chapter(db, book, ch, level)
+            with telemetry.scope(user_id=user.id, book_id=book.id, chapter_id=ch.id, feature="chapter_build"):
+                usage = content.build_chapter(db, book, ch, level)
         except Exception as e:
             db.rollback()
             ch = db.get(Chapter, chapter_id)
@@ -208,6 +218,8 @@ def build_chapter(chapter_id: str, level: str = "standard") -> None:
         ch.status, ch.built_at = "ready", datetime.now(timezone.utc)
         record_tokens(db, user, usage.tokens_in, usage.tokens_out)
         notify(db, user.id, "chapter_ready", f"Chapter {ch.n} is ready", ch.title, f"/books/{book.id}?chapter={ch.id}")
+        telemetry.event("chapter_built", user_id=user.id, book_id=book.id, chapter_id=ch.id, n=ch.n, title=ch.title,
+                        level=level, sections=len(ch.sections), tokens_in=usage.tokens_in, tokens_out=usage.tokens_out)
         db.commit()
         log.info("built chapter %s (%s in / %s out tokens)", ch.id, usage.tokens_in, usage.tokens_out)
 
@@ -224,7 +236,8 @@ def build_lesson(section_id: str, level: str) -> None:
             return
         if ch.status in ("queued", "building"):
             return  # the chapter build is writing every lesson right now
-        body, usage = content.generate_lesson(db, book, ch, sec, level, background=False)
+        with telemetry.scope(user_id=book.user_id, book_id=book.id, chapter_id=ch.id, feature="lesson_level"):
+            body, usage = content.generate_lesson(db, book, ch, sec, level, background=False)
         try:
             db.add(Lesson(section_id=sec.id, level=level, body=body, model=llm.settings.text_model))
             record_tokens(db, db.get(User, book.user_id), usage.tokens_in, usage.tokens_out)

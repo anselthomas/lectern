@@ -4,6 +4,7 @@ Book text is passed as <page n="PDF_PAGE" printed="LABEL"> blocks; the model cit
 and every citation is clamped to pages that exist in the range we sent.
 """
 import concurrent.futures as cf
+import contextvars
 import logging
 import random
 import re
@@ -298,7 +299,9 @@ def build_chapter(db: Session, book: Book, ch: Chapter, level: str) -> llm.Usage
 
     # Lessons in parallel; each worker only reads, writes happen here.
     with cf.ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {pool.submit(_lesson_job, book.id, ch.id, sec.id, level): sec for sec in secs}
+        # copy_context: threads don't inherit the telemetry scope on their own
+        futures = {pool.submit(contextvars.copy_context().run, _lesson_job, book.id, ch.id, sec.id, level): sec
+                   for sec in secs}
         for fut in cf.as_completed(futures):
             sec = futures[fut]
             body, u = fut.result()

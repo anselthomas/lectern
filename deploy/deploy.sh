@@ -14,11 +14,13 @@ echo "deploying $(git -C "$SRC" log -1 --format='%h %s')"
 param() { aws ssm get-parameter --region "$REGION" --name "$1" --with-decryption --query Parameter.Value --output text; }
 DBPW=$(param /lectern/db-password)
 ORIGIN=$(param /lectern/origin-verify)
+ADMINS=$(param /lectern/admin-emails 2>/dev/null || true)
 umask 077
 cat > /opt/lectern/secrets.env <<EOF
 POSTGRES_PASSWORD=$DBPW
 DATABASE_URL=postgresql+psycopg://lectern:$DBPW@db:5432/lectern
 ORIGIN_VERIFY=$ORIGIN
+ADMIN_EMAILS=$ADMINS
 EOF
 umask 022
 

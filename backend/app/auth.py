@@ -1,5 +1,6 @@
 """Cognito ID-token verification and the current-user dependency."""
 import time
+from datetime import datetime, timezone
 from functools import lru_cache
 
 import jwt
@@ -7,6 +8,7 @@ import requests
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
+from . import telemetry
 from .config import settings
 from .db import get_db
 from .models import User
@@ -51,11 +53,25 @@ def current_user(authorization: str = Header(default=""), db: Session = Depends(
         raise HTTPException(401, "Sign in required")
     claims = verify_token(authorization.split(" ", 1)[1])
     user = db.query(User).filter_by(cognito_sub=claims["sub"]).one_or_none()
+    created = user is None
     if user is None:
         user = User(cognito_sub=claims["sub"], email=claims.get("email", ""), name=claims.get("name"))
         db.add(user)
-        db.commit()
     elif claims.get("email") and user.email != claims["email"]:
         user.email = claims["email"]
+    if user.email and user.email.lower() in settings.admin_emails and not user.is_admin:
+        user.is_admin = True
+    now = datetime.now(timezone.utc)
+    if user.last_seen_at is None or (now - user.last_seen_at).total_seconds() > 300:
+        user.last_seen_at = now
+    if db.dirty or db.new:
         db.commit()
+    if created:
+        telemetry.event("signup", user_id=user.id)
+    return user
+
+
+def admin_user(user: User = Depends(current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(403, "Admins only")
     return user

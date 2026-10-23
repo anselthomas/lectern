@@ -247,3 +247,14 @@ mark { background: #fff1b8; color: inherit; padding: 0 2px; border-radius: 3px; 
 
 .rec-dot { width: 10px; height: 10px; border-radius: 5px; background: #fff; display: inline-block; animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
+
+/* Admin tables: full tables on desktop, labelled cards on phones */
+.data-table-wrap { overflow-x: auto; }
+.data-table td { vertical-align: top; }
+@media (max-width: 720px) {
+  .data-table thead { display: none; }
+  .data-table, .data-table tbody, .data-table tr, .data-table td { display: block; width: 100%; }
+  .data-table tr { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .data-table td { border: 0; padding: 3px 0; display: flex; justify-content: space-between; gap: 12px; text-align: right !important; }
+  .data-table td::before { content: attr(data-label); color: var(--muted-2); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; text-align: left; flex: none; }
+}

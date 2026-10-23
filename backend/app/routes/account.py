@@ -27,7 +27,7 @@ def me_out(db: Session, user: User) -> dict:
     return {
         "id": str(user.id), "email": user.email, "name": user.name, "onboarded": user.onboarded,
         "goal": user.goal, "level_default": user.level_default, "daily_minutes": user.daily_minutes,
-        "target_recall": user.target_recall, "reminders": user.reminders,
+        "target_recall": user.target_recall, "reminders": user.reminders, "is_admin": user.is_admin,
         "usage": usage_summary(db, user),
     }
 

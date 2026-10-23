@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from .. import content, jobs, llm, srs, vectors
+from .. import content, jobs, llm, srs, telemetry, vectors
 from ..auth import current_user
 from ..db import get_db
 from ..limits import check_feature, check_tutor, record_tokens
@@ -83,7 +83,10 @@ def prequestion(chapter_id: str, body: PreQ, user: User = Depends(current_user),
     ch, _ = own_chapter(db, user, chapter_id)
     if ch.status != "ready":
         raise HTTPException(409, "Chapter is still being prepared")
-    data, usage = content.prequestion_plan(ch, body.rating, body.answer, user.level_default)
+    with telemetry.scope(user_id=user.id, book_id=ch.book_id, chapter_id=ch.id, feature="prequestion"):
+        data, usage = content.prequestion_plan(ch, body.rating, body.answer, user.level_default)
+    telemetry.event("chapter_started", user_id=user.id, book_id=ch.book_id, chapter_id=ch.id, rating=body.rating,
+                    suggested_level=data.get("level"))
     if data.get("level") == "exam" and not (user.limits_exempt or user.plan.limits.get("exam")):
         data["level"] = "standard"
     p = progress_row(db, user, ch)
@@ -164,6 +167,8 @@ def complete_section(section_id: str, user: User = Depends(current_user), db: Se
                             pdf_page=b.get("page"), tag=f"{ch.n}.{sec.n} {sec.title}"[:80], source="key_term",
                             fsrs=srs.new_state()))
     db.commit()
+    telemetry.event("section_completed", user_id=user.id, book_id=book.id, chapter_id=ch.id, section=f"{ch.n}.{sec.n}",
+                    title=sec.title)
     return {"sections_done": len(p.sections_done), "sections_total": len(ch.sections)}
 
 
@@ -178,7 +183,10 @@ def explain_back(chapter_id: str, body: Explain, user: User = Depends(current_us
     ch, book = own_chapter(db, user, chapter_id)
     if ch.status != "ready":
         raise HTTPException(409, "Chapter is still being prepared")
-    data, usage = content.grade_explanation(db, ch, body.text)
+    with telemetry.scope(user_id=user.id, book_id=book.id, chapter_id=ch.id, feature="explain"):
+        data, usage = content.grade_explanation(db, ch, body.text)
+    telemetry.event("explain_submitted", user_id=user.id, book_id=book.id, chapter_id=ch.id, met=data.get("met"),
+                    total=data.get("total"), verdict=data.get("verdict"), words=len(body.text.split()))
     data["page_label"] = label_for(db, book.id, data.get("page"))
     p = progress_row(db, user, ch)
     p.explain = {"text": body.text, **data}
@@ -241,7 +249,8 @@ def check_answer(quiz_id: str, body: Check, user: User = Depends(current_user), 
     q = next((q for q in quiz.questions if q["id"] == body.question_id), None)
     if q is None:
         raise HTTPException(404, "Question not found")
-    result, usage = grade_one(q, body.answer)
+    with telemetry.scope(user_id=user.id, book_id=book.id, chapter_id=quiz.chapter_id, feature="quiz_grading"):
+        result, usage = grade_one(q, body.answer)
     record_tokens(db, user, usage.tokens_in, usage.tokens_out)
     db.commit()
     return {**result, "explanation": q["explanation"], "page": q.get("page"),
@@ -255,8 +264,13 @@ class Submit(BaseModel):
 @router.post("/quizzes/{quiz_id}/submit")
 def submit_quiz(quiz_id: str, body: Submit, user: User = Depends(current_user), db: Session = Depends(get_db)):
     quiz, book = own_quiz(db, user, quiz_id)
+    scope = dict(user_id=user.id, book_id=book.id, chapter_id=quiz.chapter_id, feature="quiz_grading")
+
+    def grade_in_scope(q):
+        with telemetry.scope(**scope):
+            return grade_one(q, body.answers.get(q["id"]))
     with cf.ThreadPoolExecutor(max_workers=4) as pool:
-        graded = list(pool.map(lambda q: grade_one(q, body.answers.get(q["id"])), quiz.questions))
+        graded = list(pool.map(grade_in_scope, quiz.questions))
     results, usage = [], llm.Usage()
     for q, (r, u) in zip(quiz.questions, graded):
         usage.add(u)
@@ -307,6 +321,9 @@ def submit_quiz(quiz_id: str, body: Submit, user: User = Depends(current_user), 
             g["correct"] += r["correct"]
         out.update(passed=score >= 0.75, by_chapter=sorted(groups.values(), key=lambda g: g["chapter_n"] or 0))
     db.commit()
+    telemetry.event("quiz_submitted" if quiz.kind == "chapter" else "final_test_submitted", user_id=user.id,
+                    book_id=book.id, chapter_id=quiz.chapter_id, score=round(score, 3), correct=out["correct"],
+                    total=out["total"], new_cards=new_cards)
     return out
 
 
@@ -402,7 +419,29 @@ def ask_tutor(body: Ask, user: User = Depends(current_user), db: Session = Depen
     history = [{"role": m.role, "text": m.text} for m in
                db.query(ChatMessage).filter_by(user_id=user.id, book_id=book.id)
                .order_by(ChatMessage.id.desc()).limit(6)][::-1]
-    excerpts = retrieve(db, user, book, body.message, chapter)
+    with telemetry.scope(user_id=user.id, book_id=book.id, chapter_id=chapter.id if chapter else None, feature="tutor"):
+        data, usage = _tutor_reply(db, user, book, chapter, section, history, body.message, level)
+    citations = [{"pdf_page": p, "label": label_for(db, book.id, p)} for p in data.get("citations", [])]
+    quiz = data.get("quiz")
+    if quiz:
+        quiz["page_label"] = label_for(db, book.id, quiz.get("page"))
+    # History keeps the quiz question as text so the next turn has the context.
+    stored = data["answer"] + (f"\n\nQuiz: {quiz['question']} Options: " + " / ".join(quiz["options"]) if quiz else "")
+    db.add(ChatMessage(user_id=user.id, book_id=book.id, role="user", text=body.message))
+    db.add(ChatMessage(user_id=user.id, book_id=book.id, role="assistant", text=stored, citations=citations))
+    telemetry.event("tutor_message", user_id=user.id, book_id=book.id, chapter_id=chapter.id if chapter else None,
+                    in_book=data.get("in_book", True), quiz=bool(quiz), chars=len(body.message),
+                    citations=len(citations))
+    usage_row.tutor_messages += 1
+    record_tokens(db, user, usage.tokens_in, usage.tokens_out)
+    db.commit()
+    return {"answer": data["answer"], "citations": citations, "in_book": data.get("in_book", True),
+            "follow_ups": data.get("follow_ups", []), "quiz": quiz}
+
+
+def _tutor_reply(db: Session, user: User, book: Book, chapter: Chapter | None, section: Section | None,
+                 history: list[dict], message: str, level: str) -> tuple[dict, llm.Usage]:
+    excerpts = retrieve(db, user, book, message, chapter)
     if section:
         # "This section" questions need the open section in view, whatever the search returned.
         have = {e["pdf_page"] for e in excerpts}
@@ -421,20 +460,8 @@ def ask_tutor(body: Ask, user: User = Depends(current_user), db: Session = Depen
                      f"of chapter {chapter.n} \"{chapter.title}\"")
         elif chapter:
             where = f"chapter {chapter.n} \"{chapter.title}\""
-        data, usage = content.tutor_answer(book, excerpts, history, body.message, where, level)
-    citations = [{"pdf_page": p, "label": label_for(db, book.id, p)} for p in data.get("citations", [])]
-    quiz = data.get("quiz")
-    if quiz:
-        quiz["page_label"] = label_for(db, book.id, quiz.get("page"))
-    # History keeps the quiz question as text so the next turn has the context.
-    stored = data["answer"] + (f"\n\nQuiz: {quiz['question']} Options: " + " / ".join(quiz["options"]) if quiz else "")
-    db.add(ChatMessage(user_id=user.id, book_id=book.id, role="user", text=body.message))
-    db.add(ChatMessage(user_id=user.id, book_id=book.id, role="assistant", text=stored, citations=citations))
-    usage_row.tutor_messages += 1
-    record_tokens(db, user, usage.tokens_in, usage.tokens_out)
-    db.commit()
-    return {"answer": data["answer"], "citations": citations, "in_book": data.get("in_book", True),
-            "follow_ups": data.get("follow_ups", []), "quiz": quiz}
+        data, usage = content.tutor_answer(book, excerpts, history, message, where, level)
+    return data, usage
 
 
 @router.get("/tutor/{book_id}/history")
@@ -476,4 +503,6 @@ def review_card(card_id: str, body: Rate, user: User = Depends(current_user), db
     card.lapses += 1 if body.rating == 1 else 0
     db.add(Review(card_id=card.id, user_id=user.id, rating=body.rating))
     db.commit()
+    telemetry.event("card_reviewed", user_id=user.id, book_id=card.book_id, chapter_id=card.chapter_id,
+                    rating=body.rating, source=card.source)
     return {"due_at": card.due_at.isoformat()}

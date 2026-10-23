@@ -21,13 +21,15 @@ import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
 import FinalTest from "./pages/FinalTest";
 import { Help, Legal, NotFound } from "./pages/Static";
+import Admin, { AdminUser } from "./pages/Admin";
 
-function Private({ children, bare }: { children: ReactNode; bare?: boolean }) {
+function Private({ children, bare, admin }: { children: ReactNode; bare?: boolean; admin?: boolean }) {
   const { me, loading } = useMe();
   const loc = useLocation();
   if (loading) return <Loading />;
   if (!me) return <Navigate to={`/signin?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
-  if (!me.onboarded && loc.pathname !== "/onboarding") return <Navigate to="/onboarding" replace />;
+  if (!me.onboarded && loc.pathname !== "/onboarding" && !admin) return <Navigate to="/onboarding" replace />;
+  if (admin && !me.is_admin) return <Navigate to="/library" replace />;
   return bare ? <>{children}</> : <><TopNav /><main>{children}</main></>;
 }
 
@@ -62,6 +64,8 @@ export default function App() {
         <Route path="/search" element={<Private><Search /></Private>} />
         <Route path="/notifications" element={<Private><Notifications /></Private>} />
         <Route path="/settings" element={<Private><Settings /></Private>} />
+        <Route path="/admin" element={<Private admin><Admin /></Private>} />
+        <Route path="/admin/users/:userId" element={<Private admin><AdminUser /></Private>} />
         <Route path="/help" element={<Help />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

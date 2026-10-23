@@ -50,7 +50,37 @@ def reset_user(email: str) -> None:
     print(f"{email}: books and history removed")
 
 
+def backfill_usage() -> None:
+    """One-off: turn token totals recorded before per-call telemetry into one llm_calls row per user and month."""
+    from datetime import datetime, timezone
+
+    from . import telemetry
+    from .models import LlmCall, UsageMonthly
+
+    with SessionLocal() as db:
+        n = 0
+        for row in db.query(UsageMonthly).all():
+            if not (row.tokens_in or row.tokens_out):
+                continue
+            if db.query(LlmCall).filter_by(user_id=row.user_id, kind="backfill").first():
+                continue
+            logged_in = sum(c.tokens_in for c in db.query(LlmCall).filter_by(user_id=row.user_id))
+            logged_out = sum(c.tokens_out for c in db.query(LlmCall).filter_by(user_id=row.user_id))
+            tin, tout = max(0, row.tokens_in - logged_in), max(0, row.tokens_out - logged_out)
+            if tin or tout:
+                db.add(LlmCall(user_id=row.user_id, feature="before_telemetry", kind="backfill", model="nova-2-lite (estimated)",
+                               tier="standard", calls=0, tokens_in=tin, tokens_out=tout,
+                               cost_usd=round(telemetry.text_cost(tin, tout), 6), ok=True,
+                               created_at=datetime.strptime(row.month + "-01", "%Y-%m-%d").replace(tzinfo=timezone.utc)))
+                n += 1
+        db.commit()
+    print(f"backfilled {n} user-months")
+
+
 if __name__ == "__main__":
+    if len(sys.argv) == 2 and sys.argv[1] == "backfill-usage":
+        backfill_usage()
+        sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[1] == "grant-internal":
         grant_internal(sys.argv[2])
     elif len(sys.argv) == 3 and sys.argv[1] == "reset-user":
