@@ -236,3 +236,11 @@ mark { background: #fff1b8; color: inherit; padding: 0 2px; border-radius: 3px; 
   .table-stack td:nth-child(2) { display: none; }
   .table-stack td:nth-child(n+3) { grid-column: 2; }
 }
+
+@media (max-width: 420px) {
+  .topnav .brand-text { display: none; }
+  .topnav-inner { gap: 2px; padding: 0 8px; }
+  .navlinks { gap: 0; }
+  .navlinks a { padding: 10px 7px; font-size: 13px; }
+  .icon-btn { width: 40px; height: 40px; }
+}

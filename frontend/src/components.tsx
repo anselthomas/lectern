@@ -29,7 +29,7 @@ export function ErrorBox({ error, retry }: { error: any; retry?: () => void }) {
 export function Brand({ to = "/" }: { to?: string }) {
   return (
     <Link to={to} className="brand" aria-label="Lectern home">
-      <span className="brand-mark" aria-hidden="true">L</span>Lectern
+      <span className="brand-mark" aria-hidden="true">L</span><span className="brand-text">Lectern</span>
     </Link>
   );
 }
