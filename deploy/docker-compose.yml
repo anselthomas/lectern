@@ -1,0 +1,49 @@
+# Runs on the EC2 app host. Env files are written by deploy.sh from SSM; nothing secret lives in the repo.
+x-app: &app
+  build: ../backend
+  image: lectern-app:latest
+  restart: unless-stopped
+  env_file: [/opt/lectern/infra.env, /opt/lectern/secrets.env]
+  environment:
+    CACHE_DIR: /data/cache
+  volumes:
+    - /data/cache:/data/cache
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: [/opt/lectern/secrets.env]
+    environment:
+      POSTGRES_USER: lectern
+      POSTGRES_DB: lectern
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "work_mem=8MB", "-c", "max_connections=60"]
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lectern -d lectern"]
+      interval: 5s
+      retries: 20
+    logging:
+      driver: awslogs
+      options: { awslogs-group: /lectern/api, awslogs-stream: db, awslogs-region: ap-southeast-2 }
+
+  api:
+    <<: *app
+    ports: ["80:8000"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')\" || exit 0"]
+      interval: 30s
+    logging:
+      driver: awslogs
+      options: { awslogs-group: /lectern/api, awslogs-stream: api, awslogs-region: ap-southeast-2 }
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "app.worker"]
+    logging:
+      driver: awslogs
+      options: { awslogs-group: /lectern/worker, awslogs-stream: worker, awslogs-region: ap-southeast-2 }
