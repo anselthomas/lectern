@@ -367,9 +367,12 @@ def retrieve(db: Session, user: User, book: Book, question: str, chapter: Chapte
             scores[n] = scores.get(n, 0) + 1 / (60 + rank)
     except Exception:
         pass  # embeddings may still be running; full-text search still works
+    # OR the question's stemmed terms: a natural question ("what does the book say about X") rarely has
+    # every word on one page. ts_rank still favours chunks that match more of them.
     fts = db.execute(text(
-        "SELECT n FROM chunks WHERE book_id = :b AND tsv @@ websearch_to_tsquery('english', :q) "
-        "ORDER BY ts_rank(tsv, websearch_to_tsquery('english', :q)) DESC LIMIT 12"),
+        "WITH q AS (SELECT to_tsquery('english', replace(plainto_tsquery('english', :q)::text, ' & ', ' | ')) AS t) "
+        "SELECT n FROM chunks, q WHERE book_id = :b AND q.t IS NOT NULL AND tsv @@ q.t "
+        "ORDER BY ts_rank_cd(tsv, q.t) DESC LIMIT 12"),
         {"b": book.id, "q": question}).fetchall()
     for rank, (n,) in enumerate(fts):
         scores[n] = scores.get(n, 0) + 1 / (60 + rank)

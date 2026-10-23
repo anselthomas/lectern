@@ -154,7 +154,9 @@ def main(email: str, pdf_url: str) -> int:
           f"citations={[x['label'] for x in tj.get('citations', [])]}")
     sample("tutor answer", tj.get("answer"))
     t = post("/tutor", {"book_id": book_id, "chapter_id": ch1["id"], "message": "Who won the 2018 FIFA World Cup?"})
-    check("Tutor declines off-book question", t.status_code == 200 and not t.json()["in_book"], t.json().get("answer", "")[:160])
+    off = t.json().get("answer", "")
+    check("Tutor declines off-book question", t.status_code == 200 and not t.json()["in_book"], off[:160])
+    check("Off-book answer doesn't leak outside facts", not any(w in off for w in ("France", "Spain", "Croatia", "Mbapp")), off[:160])
     t = post("/tutor", {"book_id": book_id, "message": "What does the book say about Bernoulli's equation?"})
     tj = t.json()
     check("Tutor retrieves from a far chapter", t.status_code == 200 and tj["in_book"] and any(int(x["pdf_page"]) > 600 for x in tj["citations"]),

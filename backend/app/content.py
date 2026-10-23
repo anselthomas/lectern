@@ -335,8 +335,9 @@ TUTOR_SCHEMA = {"type": "object", "required": ["answer", "citations", "in_book"]
 
 SYSTEM_TUTOR = (
     "You are the Lectern tutor. Answer ONLY from the book excerpts provided. If the excerpts don't contain the "
-    "answer, set in_book=false and say briefly that this book doesn't cover it, then point to the closest thing "
-    "it does cover. Cite the page n values you used. Be concise, friendly and concrete. "
+    "answer, set in_book=false, say in one sentence that this book doesn't cover it, and offer the closest topic it "
+    "does cover. In that case NEVER answer the question from general knowledge, not even partly. "
+    "Cite the page n values you used. Be concise (2-6 sentences), friendly and concrete. "
     "If asked to quiz the learner, ask one question at a time and wait."
 )
 
