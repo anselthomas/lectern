@@ -2,7 +2,7 @@
 
 Turn any book into a course you actually finish. Upload a PDF; Lectern finds the chapters, teaches them one at a time in plain words, checks what you kept with quizzes and explain-it-back prompts, and brings back what you missed as spaced-repetition flashcards. Every answer is cited to the page.
 
-> Status: early build. Infrastructure is live; the backend and frontend are in progress.
+> Status: working beta at https://d1c6wdw7xblc4l.cloudfront.net. Payments are not switched on yet.
 
 ## How it works
 
@@ -50,9 +50,9 @@ Full design, data model, pipelines and cost estimates: [docs/architecture-plan.m
 ```
 infra/        CloudFormation template for all AWS resources (lectern.yaml)
 docs/         Architecture and pipeline plan
-backend/      FastAPI app, worker, migrations, tests        (coming next)
-frontend/     React + Vite + TypeScript app                  (coming next)
-deploy/       docker-compose and deploy scripts              (coming next)
+backend/      FastAPI API (app/), background worker (app/worker.py), end-to-end QA (tests/qa_api.py)
+frontend/     React + Vite + TypeScript app
+deploy/       docker-compose, server deploy, web deploy, test-user and SSM helper scripts
 ```
 
 ## Deploying the infrastructure
@@ -70,12 +70,26 @@ aws cloudformation deploy --stack-name lectern-core --template-file infra/lecter
     --with-decryption --query Parameter.Value --output text --region ap-southeast-2)"
 ```
 
+## Deploying the app
+
+```bash
+bash deploy/run-on-host.sh deploy/deploy.sh   # server: pull main, rebuild, restart (via SSM)
+bash deploy/deploy-web.sh                     # frontend: build and publish to S3 + CloudFront
+bash deploy/create-test-user.sh EMAIL         # internal QA account; password stored in SSM /lectern/test-user
+```
+
+End-to-end QA against the live stack (runs on the server as an existing user):
+
+```bash
+docker compose exec -T api python -m tests.qa_api EMAIL PDF_URL
+```
+
 ## Roadmap
 
 - [x] AWS account setup, budget alerts, CloudTrail
 - [x] Core infrastructure: VPC, EC2, S3, S3 Vectors, CloudFront, Cognito, ECR, snapshots
-- [ ] Backend: schema, auth, plans and limits, upload and ingest pipeline
-- [ ] Chapter generation, tutor with citations, grading, FSRS review
-- [ ] Frontend from the design
-- [ ] Test user and end-to-end run on a real textbook
+- [x] Backend: schema, auth, plans and limits, upload and ingest pipeline
+- [x] Chapter generation, tutor with citations, grading, FSRS review
+- [x] Frontend from the design
+- [x] Test user and end-to-end run on a real textbook (OpenStax University Physics Vol. 1, 959 pages)
 - [ ] Later: payments, custom domain, Google sign-in, Teams

@@ -125,9 +125,12 @@ def build_map(db: Session, book: Book, ch: Chapter) -> tuple[dict, llm.Usage]:
         + (f"The PDF bookmarks list these subsections:\n{hints}\nAlign sections to them, merging very short ones.\n" if hints else "")
         + "Split the chapter into 3 to 7 teachable sections covering every page in order with no gaps "
           "(each section's pdf_start is the previous section's pdf_end + 1). Give each a short summary. "
-          "List 3-5 key ideas a learner must keep, rate difficulty, estimate total study minutes, and write one "
-          "'explain it back' prompt (ask the learner to explain the chapter's central idea to a friend in 2-4 "
-          "sentences) with 2-4 key points a good answer must contain and the page it comes from.\n\n" + text
+          "List 3-5 key ideas a learner must keep, rate difficulty, and estimate total study minutes.\n"
+          "Then write one 'explain it back' task. The prompt must name ONE specific, central concept from this "
+          "chapter (for example 'Explain dimensional analysis to a friend who missed class: what it is and why "
+          "it's useful'), never a vague 'explain the chapter'. Give 2-4 key points a good 2-4 sentence answer "
+          "would contain: each must be a concrete statement taught in THIS chapter's text (not general knowledge "
+          "about the subject), short enough to check in one glance. Give the page where the concept is explained.\n\n" + text
     )
     data, usage = llm.call_json(system=SYSTEM_TEACHER, prompt=prompt, schema=MAP_SCHEMA, tool_name="chapter_map",
                                 max_tokens=3000, background=True)
@@ -295,8 +298,10 @@ def grade_explanation(db: Session, ch: Chapter, text: str) -> tuple[dict, llm.Us
         f'Prompt given to the learner: "{ex.get("prompt", "Explain the main idea of this chapter.")}"\n'
         f"Key points a good answer contains:\n" + "\n".join(f"- {p}" for p in ex.get("key_points", [])) +
         f'\n\nLearner\'s explanation:\n"""{text}"""\n\n'
-        "For each key point say whether the learner covered it (be fair to paraphrases) with one short sentence of "
-        "feedback addressed to them. Note whether they used an example. Then write a stronger version in 2-3 "
+        "For each key point say whether the learner covered it. Be fair: count paraphrases, examples that show the "
+        "idea, and partially stated points that get the essence right. One short sentence of feedback per point, "
+        "addressed to them, kind and specific. Verdict: 'Good explanation' if most points are met, 'Getting there' "
+        "if some are, 'Not yet' if none. Note whether they used an example. Then write a stronger version in 2-3 "
         "sentences that keeps their voice.\n\n" + source
     )
     data, usage = llm.call_json(system=SYSTEM_TEACHER, prompt=prompt, schema=EXPLAIN_SCHEMA, tool_name="feedback",
@@ -315,9 +320,10 @@ def grade_short_answer(question: str, model_answer: str, answer: str) -> tuple[d
     prompt = (
         f"Question: {question}\nReference answer: {model_answer}\nLearner's answer: {answer}\n\n"
         "Grade for the idea, not the wording. Mark correct if the core idea is right even if phrased differently "
-        "or incomplete in minor details. Give one sentence of feedback addressed to the learner."
+        "or incomplete in minor details. Give one sentence of feedback addressed to the learner: if wrong, say "
+        "what the answer needs. Keep a neutral, encouraging tone and never comment on the learner's intent or effort."
     )
-    return llm.call_json(system="You grade short answers fairly and briefly.", prompt=prompt, schema=GRADE_SCHEMA,
+    return llm.call_json(system="You grade short answers fairly, briefly and kindly.", prompt=prompt, schema=GRADE_SCHEMA,
                          tool_name="grade", max_tokens=300, temperature=0)
 
 

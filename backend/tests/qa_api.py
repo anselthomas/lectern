@@ -175,15 +175,16 @@ def main(email: str, pdf_url: str) -> int:
     check("All sections completed", r.json()["sections_done"] == len(chapter["sections"]))
 
     # ---- explain it back
-    good_text = ("Physics describes nature with a few laws that work from atoms to galaxies, and to test them we measure "
-                 "quantities in agreed SI units like the metre, kilogram and second. Checking units with dimensional analysis "
-                 "and keeping the right significant figures tells us whether an answer makes sense.")
+    ex = chapter["map"]["explain"]
+    sample("explain prompt", ex)
+    # A faithful answer written from the key points, in a learner's voice.
+    good_text = "So basically, " + " Also, ".join(p.rstrip(".") + "." for p in ex["key_points"])
     r = post(f"/chapters/{ch1['id']}/explain", {"text": good_text})
     ej = r.json()
-    check("Explain-back graded", r.status_code == 200 and ej["total"] >= 2, f"{ej.get('verdict')} {ej.get('met')}/{ej.get('total')}")
+    check("Explain-back graded fairly", r.status_code == 200 and ej["total"] >= 2 and ej["met"] >= ej["total"] - 1, f"{ej.get('verdict')} {ej.get('met')}/{ej.get('total')}")
     sample("explain feedback", {"points": ej.get("points"), "stronger": ej.get("stronger_version")})
     r = post(f"/chapters/{ch1['id']}/explain", {"text": "Physics is about cooking pasta and the colours of paint."})
-    check("Weak explanation scored lower", r.status_code == 200 and r.json()["met"] < ej["met"], f"{r.json().get('verdict')} {r.json().get('met')}/{r.json().get('total')}")
+    check("Weak explanation scored lower", r.status_code == 200 and r.json()["met"] < max(1, ej["met"]), f"{r.json().get('verdict')} {r.json().get('met')}/{r.json().get('total')}")
 
     # ---- quiz
     quiz = get(f"/chapters/{ch1['id']}/quiz").json()

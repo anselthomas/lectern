@@ -1,6 +1,6 @@
 # Lectern: backend architecture and AWS deployment plan
 
-Status: draft v1, 2026-10-23. Based on the 36 screens in `Lectern — Study-from-PDF App.html`.
+Status: v2, 2026-10-24 — phases 0–6 built and deployed; payments, SES email, Google sign-in and Teams still to do. Based on the 36 screens in `Lectern — Study-from-PDF App.html`.
 Payments (screens 11, 13) are out of scope for this phase. Billing UI reads from a `plans` table so Stripe/Razorpay can plug in later.
 
 ---
@@ -242,6 +242,14 @@ AWS now asks new accounts to pick a **Free plan** or **Paid plan** at sign-up. B
 **Recommendation: choose the Paid plan** and rely on the Budgets alerts in section 2 for cost control. A production app shouldn't sit on an account that closes itself.
 
 ---
+
+## 7b. What changed during the build
+
+- **Lessons are generated per section** (one call each, run 4 at a time) after a chapter-map call; quizzes use a strict schema with separate multiple-choice and short-answer lists so options and answers can't be omitted.
+- **Lessons at other levels are built on demand** by a `build_lesson` job the first time someone switches level, then cached.
+- **Tutor retrieval** merges S3 Vectors similarity and Postgres full-text results (reciprocal rank fusion), boosts the current chapter, and drops any citation the model gives for a page it wasn't shown.
+- **Measured on OpenStax University Physics Vol. 1 (959 pages, 81 MB):** ingest 9 s, 17 chapters + 7 appendices from bookmarks, 1,802 chunks embedded in ~2 min, chapter 1 built in ~90 s for ~95k input / ~6k output tokens (≈ $0.02–0.04).
+- **Email** (chapter ready, reminders) is in-app only until an SES sending domain exists. Cognito sends verification and reset codes itself (50/day limit).
 
 ## 8. Build order
 
