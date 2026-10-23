@@ -61,7 +61,7 @@ export default function Landing() {
             <span className="small muted">Free for one book. No card needed.</span>
           </div>
           <div className="card stack gap-16" style={{ boxShadow: "0 24px 64px rgba(18,21,28,.10)" }}>
-            <div className="row between"><span className="mono muted">Section 1.2 · pp. 8–13</span><div className="seg" role="presentation"><button>Simple</button><button aria-checked="true">Standard</button><button>Exam</button></div></div>
+            <div className="row between wrap gap-8"><span className="mono muted">Section 1.2 · pp. 8–13</span><div className="seg" role="presentation"><button>Simple</button><button aria-checked="true">Standard</button><button>Exam</button></div></div>
             <h2>Units and standards</h2>
             <p className="reading" style={{ fontSize: 17 }}>Every measurement is a number <strong>and</strong> a unit. The SI system picks seven base units — the metre, kilogram and second among them — and builds everything else from those.</p>
             <div className="soft stack gap-8"><span className="eyebrow">Quick check</span><strong>Which of these is an SI base unit?</strong>

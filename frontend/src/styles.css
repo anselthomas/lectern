@@ -206,9 +206,9 @@ mark { background: #fff1b8; color: inherit; padding: 0 2px; border-radius: 3px; 
 @media (max-width: 720px) { .lesson-rail { max-width: none; border-right: 0; border-bottom: 1px solid var(--line); flex-direction: row; overflow-x: auto; padding: 8px; } .lesson-rail .label { display: none; } .lesson-main { padding: 24px 16px 40px; } }
 
 /* landing */
-.hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; padding: 72px 0 56px; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 48px; align-items: center; padding: 72px 0 56px; }
 .hero h1 { font-size: 60px; letter-spacing: -0.035em; line-height: 1.04; }
-@media (max-width: 900px) { .hero { grid-template-columns: 1fr; padding: 40px 0; } .hero h1 { font-size: 40px; } }
+@media (max-width: 900px) { .hero { grid-template-columns: minmax(0, 1fr); padding: 40px 0; } .hero h1 { font-size: 40px; } }
 .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 @media (max-width: 900px) { .price-grid { grid-template-columns: 1fr; } }
 .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }

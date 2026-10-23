@@ -38,8 +38,8 @@ export default function Progress() {
       <div className="card stack gap-12">
         <h3>By book</h3>
         {data.by_book.length === 0 ? <span className="muted">No books yet.</span> : (
-          <div style={{ overflowX: "auto" }}><table className="table"><thead><tr><th>Book</th><th>Chapters mastered</th><th>Quiz avg</th><th>Time</th></tr></thead>
-            <tbody>{data.by_book.map((b: any) => <tr key={b.id}><td><Link to={`/books/${b.id}`}>{b.title}</Link></td><td>{b.chapters_mastered} / {b.chapters_total}</td><td>{b.quiz_avg != null ? `${b.quiz_avg}%` : "—"}</td><td>{b.minutes >= 60 ? `${Math.floor(b.minutes / 60)} h ${b.minutes % 60} m` : `${b.minutes} m`}</td></tr>)}</tbody></table></div>)}
+          <div className="data-table-wrap"><table className="table data-table"><thead><tr><th>Book</th><th>Chapters mastered</th><th>Quiz avg</th><th>Time</th></tr></thead>
+            <tbody>{data.by_book.map((b: any) => <tr key={b.id}><td data-label="Book"><Link to={`/books/${b.id}`}>{b.title}</Link></td><td data-label="Mastered">{b.chapters_mastered} / {b.chapters_total}</td><td data-label="Quiz avg">{b.quiz_avg != null ? `${b.quiz_avg}%` : "—"}</td><td data-label="Time">{b.minutes >= 60 ? `${Math.floor(b.minutes / 60)} h ${b.minutes % 60} m` : `${b.minutes} m`}</td></tr>)}</tbody></table></div>)}
       </div>
       <div className="card stack gap-12">
         <h3>Needs attention</h3>

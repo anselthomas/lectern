@@ -33,8 +33,8 @@ export default function Notifications() {
         </div>)}
       <div className="card stack gap-12">
         <h3>Send me</h3>
-        <table className="table"><thead><tr><th>Type</th><th>In app</th><th>Email</th></tr></thead>
-          <tbody>{["Daily review reminder", "Book or chapter ready", "Streak at risk", "Billing and receipts", "Product updates"].map((t) => <tr key={t}><td>{t}</td><td><input type="checkbox" defaultChecked aria-label={`${t} in app`} /></td><td><input type="checkbox" disabled aria-label={`${t} email`} /></td></tr>)}</tbody></table>
+        <table className="table data-table"><thead><tr><th>Type</th><th>In app</th><th>Email</th></tr></thead>
+          <tbody>{["Daily review reminder", "Book or chapter ready", "Streak at risk", "Billing and receipts", "Product updates"].map((t) => <tr key={t}><td data-label="Type">{t}</td><td data-label="In app"><input type="checkbox" defaultChecked aria-label={`${t} in app`} /></td><td data-label="Email"><input type="checkbox" disabled aria-label={`${t} email`} /></td></tr>)}</tbody></table>
         <span className="small muted">Email notifications switch on once we finish setting up our sending domain. Billing emails are required while you have a paid plan.</span>
       </div>
     </div>

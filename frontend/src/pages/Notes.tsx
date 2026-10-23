@@ -31,7 +31,7 @@ export default function Notes() {
     <div className="page stack gap-24">
       <nav className="small muted"><Link to={`/books/${bookId}`}>{book.title}</Link> / Notes</nav>
       <div className="row between wrap gap-12"><h1>Notes</h1>
-        <div className="row gap-8"><select className="select" style={{ height: 40, width: 200 }} aria-label="Chapter" value={filter} onChange={(e) => setFilter(e.target.value)}>
+        <div className="row gap-8 wrap"><select className="select" style={{ height: 40, width: 200, maxWidth: "100%" }} aria-label="Chapter" value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="all">All chapters</option>{chapters.map((c: any) => <option key={c.id} value={c.n}>Ch. {c.n}: {c.title.slice(0, 40)}</option>)}</select>
           <button className="btn btn-sm btn-secondary" onClick={exportMd} disabled={!notes.length}>Export</button>
           <button className="btn btn-sm btn-secondary" onClick={() => download("/me/cards.csv", "lectern-flashcards.csv")}>Flashcards CSV</button></div>
