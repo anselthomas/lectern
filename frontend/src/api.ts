@@ -26,13 +26,14 @@ export function showLimit(message: string, code = "limit") {
 
 export async function api<T = any>(path: string, opts: { method?: string; body?: unknown; raw?: boolean } = {}): Promise<T> {
   const token = await idToken();
+  const isForm = opts.body instanceof FormData; // files: let the browser set the multipart boundary
   const res = await fetch(`/api${path}`, {
     method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
     headers: {
-      ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(opts.body !== undefined && !isForm ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    body: opts.body === undefined ? undefined : isForm ? (opts.body as FormData) : JSON.stringify(opts.body),
   });
   if (opts.raw && res.ok) return res as any;
   if (!res.ok) {

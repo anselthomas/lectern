@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, trackStudy } from "../api";
 import { ErrorBox, Loading, PageChip, Rich, RichBlock, SourceViewer, Spinner, TopNav } from "../components";
+import { VoiceInput } from "../voice";
 import { useMe } from "../state";
 
 const LEVELS = [["simple", "Simple"], ["standard", "Standard"], ["exam", "Exam"]];
@@ -73,6 +74,7 @@ function Tutor({ bookId, chapterId, sectionId, level, onOpen, onClose }: { bookI
         <div className="row gap-4 wrap">{suggestions.slice(0, 3).map((s: string) => <button key={s} className="btn btn-sm btn-secondary" style={{ height: "auto", minHeight: 36, padding: "6px 12px", whiteSpace: "normal", textAlign: "left" }} disabled={busy} onClick={() => ask(s)}>{s}</button>)}</div>
         <form className="row gap-8" onSubmit={submit}>
           <input className="input" placeholder="Ask the tutor" aria-label="Ask the tutor" value={text} onChange={(e) => setText(e.target.value)} maxLength={2000} />
+          <VoiceInput compact disabled={busy} onText={(t) => setText((prev) => (prev.trim() ? `${prev.trim()} ${t}` : t))} />
           <button className="btn btn-primary" disabled={busy || !text.trim()} aria-label="Send">↑</button>
         </form>
       </div>

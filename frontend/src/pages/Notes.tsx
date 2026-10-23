@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, download } from "../api";
 import { ErrorBox, Loading, PageChip, SourceViewer } from "../components";
+import { VoiceInput } from "../voice";
 import { useApi } from "../state";
 
 export default function Notes() {
@@ -39,6 +40,7 @@ export default function Notes() {
       <form className="card row gap-8 wrap" onSubmit={add}>
         {err && <ErrorBox error={err} />}
         <input className="input grow" style={{ flexBasis: 300 }} placeholder="New note" aria-label="New note" value={text} onChange={(e) => setText(e.target.value)} maxLength={4000} />
+        <VoiceInput compact onText={(t) => setText((prev) => (prev.trim() ? `${prev.trim()} ${t}` : t))} />
         <input className="input mono" style={{ width: 120 }} type="number" min={1} placeholder="PDF page" aria-label="PDF page (optional)" value={page} onChange={(e) => setPage(e.target.value)} />
         <button className="btn btn-strong" disabled={!text.trim()}>Add</button>
       </form>

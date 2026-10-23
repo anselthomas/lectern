@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, trackStudy } from "../api";
 import { ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
+import { VoiceInput } from "../voice";
 import { useApi } from "../state";
 
 /** Shared question runner for chapter quizzes and the final test. */
@@ -53,7 +54,10 @@ export function QuizRunner({ quiz, bookId, onSubmit, timed, header }: { quiz: an
           <div className="field">
             <label htmlFor={`a-${q.id}`}>Your answer, in your own words</label>
             <textarea id={`a-${q.id}`} className="textarea" value={answer ?? ""} disabled={!!result} onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })} maxLength={2000} />
-            <span className="small muted">Graded for the idea, not exact wording.</span>
+            <div className="row between wrap gap-8">
+              <VoiceInput disabled={!!result} onText={(t) => setAnswers((a) => ({ ...a, [q.id]: a[q.id] ? `${String(a[q.id]).trim()} ${t}` : t }))} />
+              <span className="small muted">Graded for the idea, not exact wording.</span>
+            </div>
           </div>
         )}
         {result && (

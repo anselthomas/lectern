@@ -302,6 +302,10 @@ Resources:
                   - arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0
                   - arn:aws:bedrock:::foundation-model/amazon.nova-2-lite-v1:0
                   - arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0
+              - Sid: VoiceTranscription
+                Effect: Allow
+                Action: [transcribe:StartTranscriptionJob, transcribe:GetTranscriptionJob, transcribe:DeleteTranscriptionJob]
+                Resource: !Sub "arn:aws:transcribe:${AWS::Region}:${AWS::AccountId}:transcription-job/lectern-*"
               - Sid: CognitoAdmin
                 Effect: Allow
                 Action:

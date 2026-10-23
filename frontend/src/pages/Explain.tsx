@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, trackStudy } from "../api";
 import { ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
+import { VoiceInput } from "../voice";
 import { useApi } from "../state";
 
 export default function Explain() {
@@ -34,7 +35,10 @@ export default function Explain() {
       <div className="field">
         <label htmlFor="exp">Your explanation</label>
         <textarea id="exp" className="textarea" style={{ minHeight: 160 }} value={text} onChange={(e) => { setText(e.target.value); }} maxLength={3000} />
-        <span className="small muted">{words} words</span>
+        <div className="row between wrap gap-8">
+          <VoiceInput disabled={!!fb} onText={(t) => setText((prev) => (prev.trim() ? `${prev.trim()} ${t}` : t))} />
+          <span className="small muted">{words} words</span>
+        </div>
       </div>
       {!fb && <button className="btn btn-strong" style={{ alignSelf: "flex-start" }} disabled={busy || words < 5} onClick={submit}>{busy ? <><Spinner />Reading your answer…</> : "Get feedback"}</button>}
       {fb && (

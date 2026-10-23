@@ -53,6 +53,7 @@ class UsageMonthly(Base):
     month: Mapped[str] = mapped_column(String(7), primary_key=True)  # YYYY-MM
     books_added: Mapped[int] = mapped_column(Integer, default=0)
     tutor_messages: Mapped[int] = mapped_column(Integer, default=0)
+    voice_clips: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     tokens_in: Mapped[int] = mapped_column(BigInteger, default=0)
     tokens_out: Mapped[int] = mapped_column(BigInteger, default=0)
 

@@ -32,5 +32,10 @@ def s3vectors():
 
 
 @lru_cache
+def transcribe():
+    return boto3.client("transcribe", region_name=settings.aws_region)
+
+
+@lru_cache
 def cognito():
     return boto3.client("cognito-idp", region_name=settings.aws_region)

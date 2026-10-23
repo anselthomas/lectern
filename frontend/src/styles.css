@@ -244,3 +244,6 @@ mark { background: #fff1b8; color: inherit; padding: 0 2px; border-radius: 3px; 
   .navlinks a { padding: 10px 7px; font-size: 13px; }
   .icon-btn { width: 40px; height: 40px; }
 }
+
+.rec-dot { width: 10px; height: 10px; border-radius: 5px; background: #fff; display: inline-block; animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }

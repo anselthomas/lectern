@@ -8,6 +8,8 @@ from sqlalchemy.engine import Engine
 STATEMENTS = [
     # 2026-10-24: "citation_report" didn't fit in varchar(12).
     "ALTER TABLE notes ALTER COLUMN kind TYPE varchar(20)",
+    # 2026-10-24: voice answers (Amazon Transcribe) are metered per clip.
+    "ALTER TABLE usage_monthly ADD COLUMN IF NOT EXISTS voice_clips integer NOT NULL DEFAULT 0",
 ]
 
 

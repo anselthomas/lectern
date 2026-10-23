@@ -8,7 +8,7 @@ from .config import settings
 from .db import Base, SessionLocal, engine
 from . import migrations
 from .limits import seed_plans
-from .routes import account, books, learn
+from .routes import account, books, learn, voice
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("lectern.api")
@@ -52,3 +52,4 @@ def health():
 app.include_router(account.router)
 app.include_router(books.router)
 app.include_router(learn.router)
+app.include_router(voice.router)

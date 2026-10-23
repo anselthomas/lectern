@@ -63,6 +63,7 @@ export default function Settings() {
         <Meter label="Books" used={u.books.used} limit={u.books.limit} />
         <Meter label="Storage" used={u.storage_mb.used} limit={u.storage_mb.limit} unit=" MB" />
         <Meter label="Tutor messages" used={u.tutor_messages.used} limit={u.tutor_messages.limit} />
+        {u.voice_clips && <Meter label="Voice answers" used={u.voice_clips.used} limit={u.voice_clips.limit} />}
         <span className="small muted">Invoices will appear here once payments are switched on.</span>
       </section>
       <section className="card stack gap-16">

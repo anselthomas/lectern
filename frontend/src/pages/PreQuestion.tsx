@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { ErrorBox, Loading, Spinner } from "../components";
+import { VoiceInput } from "../voice";
 import { useApi } from "../state";
 
 const levels = [
@@ -47,6 +48,7 @@ export default function PreQuestion() {
       <div className="field">
         <label htmlFor="pre">In a sentence or two, what do you think it means? <span className="muted">(optional)</span></label>
         <textarea id="pre" className="textarea" value={answer} onChange={(e) => setAnswer(e.target.value)} disabled={!!plan} maxLength={2000} />
+        <VoiceInput disabled={!!plan} onText={(t) => setAnswer((prev) => (prev.trim() ? `${prev.trim()} ${t}` : t))} />
       </div>
       {plan && (
         <div className="card stack gap-8" role="status" style={{ borderColor: "var(--accent-soft-2)", background: "var(--accent-soft)" }}>

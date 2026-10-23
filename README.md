@@ -93,3 +93,7 @@ docker compose exec -T api python -m tests.qa_api EMAIL PDF_URL
 - [x] Frontend from the design
 - [x] Test user and end-to-end run on a real textbook (OpenStax University Physics Vol. 1, 959 pages)
 - [ ] Later: payments, custom domain, Google sign-in, Teams
+
+> Infra note: `infra/lectern.yaml` includes a fix to the instance's first-boot health placeholder that the running
+> stack doesn't have yet. Deploying the template as-is stops and starts the app server (data is on its own volume and
+> survives). IAM-only changes can be applied without touching the instance by change-setting the deployed template.
