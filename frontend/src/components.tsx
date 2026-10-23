@@ -209,6 +209,34 @@ export function Rich({ text }: { text: string }) {
   return <>{parts.map((p, i) => p.startsWith("**") && p.endsWith("**") ? <strong key={i}>{p.slice(2, -2)}</strong> : <span key={i}>{p}</span>)}</>;
 }
 
+/** Multi-line model text: paragraphs, plus "- " / "• " / "1. " lines rendered as lists. */
+export function RichBlock({ text }: { text: string }) {
+  const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+  const out: JSX.Element[] = [];
+  let list: { ordered: boolean; items: string[] } | null = null;
+  const flush = () => {
+    if (!list) return;
+    const items = list.items.map((it, i) => <li key={i}><Rich text={it} /></li>);
+    out.push(list.ordered ? <ol key={out.length} style={{ margin: "6px 0", paddingLeft: 20 }}>{items}</ol>
+      : <ul key={out.length} style={{ margin: "6px 0", paddingLeft: 20 }}>{items}</ul>);
+    list = null;
+  };
+  for (const line of lines) {
+    const bullet = line.match(/^[-•*]\s+(.*)$/);
+    const numbered = line.match(/^\d+[.)]\s+(.*)$/);
+    if (bullet || numbered) {
+      const ordered = !!numbered;
+      if (!list || list.ordered !== ordered) { flush(); list = { ordered, items: [] }; }
+      list.items.push((bullet ?? numbered)![1]);
+    } else {
+      flush();
+      out.push(<p key={out.length} style={{ margin: out.length ? "8px 0 0" : 0 }}><Rich text={line} /></p>);
+    }
+  }
+  flush();
+  return <>{out}</>;
+}
+
 export const coverColors = ["#3346D3", "#1F7A4D", "#9A4A06", "#2A2F3A", "#8A1C12", "#2836A8"];
 export function Cover({ title, i = 0 }: { title: string; i?: number }) {
   const hash = [...title].reduce((a, c) => a + c.charCodeAt(0), i);

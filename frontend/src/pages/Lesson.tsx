@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, trackStudy } from "../api";
-import { ErrorBox, Loading, PageChip, Rich, SourceViewer, Spinner, TopNav } from "../components";
+import { ErrorBox, Loading, PageChip, Rich, RichBlock, SourceViewer, Spinner, TopNav } from "../components";
 import { useMe } from "../state";
 
 const LEVELS = [["simple", "Simple"], ["standard", "Standard"], ["exam", "Exam"]];
@@ -26,7 +26,7 @@ function QuickCheck({ q, i, total, onOpen }: { q: any; i: number; total: number;
   );
 }
 
-function Tutor({ bookId, chapterId, level, onOpen, onClose }: { bookId: string; chapterId: string; level: string; onOpen: (p: number, quote?: string) => void; onClose: () => void }) {
+function Tutor({ bookId, chapterId, sectionId, level, onOpen, onClose }: { bookId: string; chapterId: string; sectionId: string; level: string; onOpen: (p: number, quote?: string) => void; onClose: () => void }) {
   const [log, setLog] = useState<any[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,7 +39,7 @@ function Tutor({ bookId, chapterId, level, onOpen, onClose }: { bookId: string; 
     setErr(null); setBusy(true); setText("");
     setLog((l) => [...l, { role: "user", text: message }]);
     try {
-      const r = await api("/tutor", { body: { book_id: bookId, chapter_id: chapterId, message, level } });
+      const r = await api("/tutor", { body: { book_id: bookId, chapter_id: chapterId, section_id: sectionId, message, level } });
       setLog((l) => [...l, { role: "assistant", text: r.answer, citations: r.citations, follow_ups: r.follow_ups, in_book: r.in_book }]);
     } catch (e) {
       setLog((l) => l.slice(0, -1)); setText(message);
@@ -59,7 +59,7 @@ function Tutor({ bookId, chapterId, level, onOpen, onClose }: { bookId: string; 
         {log.length === 0 && <p className="small muted">Ask about anything in this book. Answers cite the pages they come from.</p>}
         {log.map((m, i) => m.role === "user" ? <div key={i} className="bubble-me">{m.text}</div> : (
           <div key={i} className="stack gap-8" style={{ maxWidth: "94%" }}>
-            <div className="bubble-ai">{m.text.split(/\n+/).map((p: string, k: number) => <p key={k} style={{ marginTop: k ? 8 : 0 }}><Rich text={p} /></p>)}</div>
+            <div className="bubble-ai"><RichBlock text={m.text} /></div>
             {m.citations?.length > 0 && <div className="row gap-4 wrap">{m.citations.map((c: any) => <PageChip key={c.pdf_page} page={c.pdf_page} label={c.label} onOpen={(p) => onOpen(p, m.text.slice(0, 140))} />)}</div>}
           </div>))}
         {busy && <div className="row gap-8 small muted"><Spinner />Looking through the book…</div>}
@@ -177,7 +177,7 @@ export default function Lesson() {
             </div>
           </article>
         </main>
-        {tutorOpen && <Tutor bookId={sec.book.id} chapterId={ch.id} level={level} onOpen={open} onClose={() => setTutorOpen(false)} />}
+        {tutorOpen && <Tutor bookId={sec.book.id} chapterId={ch.id} sectionId={sec.id} level={level} onOpen={open} onClose={() => setTutorOpen(false)} />}
       </div>
       {viewer && <SourceViewer bookId={sec.book.id} page={viewer.page} quote={viewer.quote} onClose={() => setViewer(null)} />}
     </div>

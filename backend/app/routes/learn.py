@@ -354,6 +354,7 @@ def final_start(book_id: str, user: User = Depends(current_user), db: Session = 
 class Ask(BaseModel):
     book_id: str
     chapter_id: str | None = None
+    section_id: str | None = None
     message: str = Field(min_length=1, max_length=2000)
     level: str | None = None
 
@@ -392,19 +393,34 @@ def retrieve(db: Session, user: User, book: Book, question: str, chapter: Chapte
 def ask_tutor(body: Ask, user: User = Depends(current_user), db: Session = Depends(get_db)):
     book = own_book(db, user, body.book_id)
     chapter = own_chapter(db, user, body.chapter_id)[0] if body.chapter_id else None
+    section = own_section(db, user, body.section_id)[0] if body.section_id else None
+    if section and (not chapter or section.chapter_id != chapter.id):
+        chapter = db.get(Chapter, section.chapter_id)
     usage_row = check_tutor(db, user)
     level = body.level if body.level in LEVELS else user.level_default
     history = [{"role": m.role, "text": m.text} for m in
                db.query(ChatMessage).filter_by(user_id=user.id, book_id=book.id)
                .order_by(ChatMessage.id.desc()).limit(6)][::-1]
     excerpts = retrieve(db, user, book, body.message, chapter)
+    if section:
+        # "This section" questions need the open section in view, whatever the search returned.
+        have = {e["pdf_page"] for e in excerpts}
+        own = (db.query(Chunk).filter(Chunk.book_id == book.id, Chunk.pdf_page >= section.pdf_start,
+                                      Chunk.pdf_page <= section.pdf_end).order_by(Chunk.n).limit(4).all())
+        excerpts = sorted(excerpts + [{"pdf_page": c.pdf_page, "label": label_for(db, book.id, c.pdf_page), "text": c.text}
+                                      for c in own if c.pdf_page not in have], key=lambda e: e["pdf_page"])
     if not excerpts:
         data = {"answer": "I couldn't find anything about that in this book yet. If the book was just uploaded, "
                           "search is still being prepared — try again in a minute.", "citations": [], "in_book": False}
         usage = llm.Usage()
     else:
-        data, usage = content.tutor_answer(book, excerpts, history, body.message,
-                                           f"Chapter {chapter.n}: {chapter.title}" if chapter else None, level)
+        where = None
+        if section:
+            where = (f"section {chapter.n}.{section.n} \"{section.title}\" (pages n={section.pdf_start}..{section.pdf_end}) "
+                     f"of chapter {chapter.n} \"{chapter.title}\"")
+        elif chapter:
+            where = f"chapter {chapter.n} \"{chapter.title}\""
+        data, usage = content.tutor_answer(book, excerpts, history, body.message, where, level)
     citations = [{"pdf_page": p, "label": label_for(db, book.id, p)} for p in data.get("citations", [])]
     db.add(ChatMessage(user_id=user.id, book_id=book.id, role="user", text=body.message))
     db.add(ChatMessage(user_id=user.id, book_id=book.id, role="assistant", text=data["answer"], citations=citations))

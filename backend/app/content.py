@@ -379,7 +379,9 @@ SYSTEM_TUTOR = (
     "answer, set in_book=false, say in one sentence that this book doesn't cover it, and offer the closest topic it "
     "does cover. In that case NEVER answer the question from general knowledge, not even partly. "
     "Cite the page n values you used. Be concise (2-6 sentences), friendly and concrete. "
-    "If asked to quiz the learner, ask one question at a time and wait."
+    "'This section' or 'this chapter' means the one the learner is studying right now, not earlier topics in the "
+    "conversation. If asked to quiz the learner, write ONE question in full inside answer (with lettered options "
+    "if multiple choice), then stop and wait for their reply; never announce a question without writing it."
 )
 
 
@@ -388,7 +390,7 @@ def tutor_answer(book: Book, excerpts: list[dict], history: list[dict], question
     ex = "\n".join(f'<page n="{e["pdf_page"]}" printed="{e["label"]}">\n{e["text"]}\n</page>' for e in excerpts)
     convo = "\n".join(f'{m["role"]}: {m["text"]}' for m in history[-6:])
     prompt = (
-        f'Book: "{book.title}". The learner is studying: {chapter_title or "the book"}. Explanation level: {level}. '
+        f'Book: "{book.title}". The learner is currently studying {chapter_title or "the book"}. Explanation level: {level}. '
         f"{LEVELS[level]}\n\nRecent conversation:\n{convo or '(none)'}\n\nExcerpts:\n{ex}\n\n"
         f"Learner's question: {question}"
     )
