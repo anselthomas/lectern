@@ -285,6 +285,7 @@ def page_image(book_id: str, n: int, user: User = Depends(current_user), db: Ses
 
 class NoteIn(BaseModel):
     pdf_page: int | None = None
+    page_label: str | None = Field(default=None, max_length=20)  # the page number printed in the book
     kind: str = "note"
     quote: str | None = Field(default=None, max_length=4000)
     text: str | None = Field(default=None, max_length=4000)
@@ -309,6 +310,14 @@ def add_note(book_id: str, body: NoteIn, user: User = Depends(current_user), db:
     book = own_book(db, user, book_id)
     if body.kind not in ("note", "highlight", "citation_report"):
         raise HTTPException(400, "Unknown note kind")
+    if body.page_label and not body.pdf_page:
+        match = db.query(Page).filter(Page.book_id == book.id, Page.label == body.page_label.strip()).first()
+        if match is None and body.page_label.strip().isdigit():
+            n = int(body.page_label)
+            match = db.get(Page, (book.id, n + (book.page_offset or 0)))
+        if match is None:
+            raise HTTPException(400, {"code": "bad_page", "message": f"This book has no page {body.page_label}."})
+        body.pdf_page = match.pdf_page
     ch = next((c for c in book.chapters if body.pdf_page and c.pdf_start <= body.pdf_page <= c.pdf_end), None)
     note = Note(user_id=user.id, book_id=book.id, chapter_n=ch.n if ch else None, pdf_page=body.pdf_page,
                 kind=body.kind, quote=body.quote, text=body.text)

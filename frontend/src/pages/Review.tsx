@@ -56,7 +56,7 @@ export default function Review() {
       {!shown ? <button className="btn btn-strong" style={{ alignSelf: "center", minWidth: 220 }} onClick={() => setShown(true)}>Show answer <span className="mono" style={{ opacity: .6 }}>space</span></button> : (
         <div className="row gap-8 center wrap">
           {ratings.map(([r, l]) => (
-            <button key={r} className={`btn ${r === 3 ? "btn-primary" : "btn-secondary"}`} style={{ flexDirection: "column", height: 64, minWidth: 110, gap: 2 }} disabled={busy} onClick={() => rate(r)}>
+            <button key={r} className={`btn ${r === 3 ? "btn-primary" : "btn-secondary"}`} style={{ flexDirection: "column", height: 64, minWidth: 110, gap: 2 }} disabled={busy} onClick={() => rate(r)} aria-label={`${l}, next review in ${card.intervals?.[r] ?? "later"}`}>
               <span>{l}</span><span className="tiny" style={{ opacity: .75, fontWeight: 600 }}>{card.intervals?.[r]}</span>
             </button>))}
           {busy && <Spinner />}

@@ -21,7 +21,7 @@ export default function Notes() {
   const shown = notes.filter((n) => (filter === "all" || String(n.chapter_n) === filter) && (tab === "all" || n.kind === tab));
   const add = async (e: FormEvent) => {
     e.preventDefault(); setErr(null);
-    try { await api(`/books/${bookId}/notes`, { body: { kind: "note", text, pdf_page: page ? +page : null } }); setText(""); setPage(""); reload(true); } catch (e) { setErr(e); }
+    try { await api(`/books/${bookId}/notes`, { body: { kind: "note", text, page_label: page.trim() || null } }); setText(""); setPage(""); reload(true); } catch (e) { setErr(e); }
   };
   const exportMd = () => {
     const md = `# Notes: ${book.title}\n\n` + notes.map((n) => `- ${n.page_label ? `(p. ${n.page_label}) ` : ""}${n.quote ? `“${n.quote}” ` : ""}${n.text ?? ""}`).join("\n");
@@ -41,7 +41,7 @@ export default function Notes() {
         {err && <ErrorBox error={err} />}
         <input className="input grow" style={{ flexBasis: 300 }} placeholder="New note" aria-label="New note" value={text} onChange={(e) => setText(e.target.value)} maxLength={4000} />
         <VoiceInput compact onText={(t) => setText((prev) => (prev.trim() ? `${prev.trim()} ${t}` : t))} />
-        <input className="input mono" style={{ width: 120 }} type="number" min={1} placeholder="PDF page" aria-label="PDF page (optional)" value={page} onChange={(e) => setPage(e.target.value)} />
+        <input className="input mono" style={{ width: 120 }} placeholder="Book page" aria-label="Book page (optional)" inputMode="numeric" value={page} onChange={(e) => setPage(e.target.value)} />
         <button className="btn btn-strong" disabled={!text.trim()}>Add</button>
       </form>
       {shown.length === 0 ? <div className="card empty"><h3>No notes yet</h3><span className="muted">Save pages from the source viewer, or add a note above.</span></div> :
