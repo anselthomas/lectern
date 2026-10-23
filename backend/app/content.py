@@ -6,6 +6,7 @@ and every citation is clamped to pages that exist in the range we sent.
 import concurrent.futures as cf
 import logging
 import random
+import re
 
 from sqlalchemy.orm import Session
 
@@ -213,6 +214,44 @@ def build_quiz(db: Session, book: Book, ch: Chapter, sections: list[Section]) ->
     return out, usage
 
 
+REVIEW_MATTER = re.compile(
+    r"^\s*(key terms?|key equations?|summary|chapter (summary|review)|review questions|conceptual questions|"
+    r"(additional |challenge )?problems|exercises|critical thinking( questions)?|self-check questions|glossary|"
+    r"references|further reading|bibliography)\b", re.I)
+
+
+def sections_from_hints(ch: Chapter, model_sections: list[dict]) -> list[dict] | None:
+    """When the book itself marks the subdivisions (bookmarks or contents lines), use them as the sections:
+    exact titles and start pages. End-of-chapter review material is folded into the section before it.
+    The model's sections only contribute summaries. Returns None to fall back to the model's split."""
+    hints = sorted({h["pdf_page"]: h for h in (ch.outline_children or [])
+                    if isinstance(h.get("pdf_page"), int) and ch.pdf_start <= h["pdf_page"] <= ch.pdf_end}.values(),
+                   key=lambda h: h["pdf_page"])
+    hints = [h for h in hints if not REVIEW_MATTER.match(h["title"])]
+    if not 2 <= len(hints) <= 10:
+        return None
+
+    def words(t: str) -> set[str]:
+        return {w for w in re.findall(r"[a-z]{4,}", t.lower())}
+
+    out = []
+    for h in hints:
+        best = max(model_sections, key=lambda s: len(words(s.get("title", "")) & words(h["title"])), default=None)
+        summary = best.get("summary", "") if best and words(best.get("title", "")) & words(h["title"]) else ""
+        title = re.sub(r"^\s*\d+[-.]\d+\s*", "", h["title"]).strip() or h["title"]
+        out.append({"title": title, "pdf_start": h["pdf_page"], "pdf_end": h["pdf_page"], "summary": summary})
+    out[0]["pdf_start"] = ch.pdf_start  # the chapter opener belongs to the first section
+    # A one-page "Introduction" isn't worth its own lesson: let the next section absorb it.
+    merged = []
+    for i, s in enumerate(out):
+        nxt = out[i + 1] if i + 1 < len(out) else None
+        if nxt and nxt["pdf_start"] - s["pdf_start"] < 2:
+            nxt["pdf_start"] = s["pdf_start"]
+            continue
+        merged.append(s)
+    return merged if len(merged) >= 2 else None
+
+
 def build_chapter(db: Session, book: Book, ch: Chapter, level: str) -> llm.Usage:
     """Map, sections, lessons at the learner's level, and the quiz. Caller commits."""
     total = llm.Usage()
@@ -222,7 +261,8 @@ def build_chapter(db: Session, book: Book, ch: Chapter, level: str) -> llm.Usage
         db.delete(s)
     db.flush()
     secs = []
-    for i, s in enumerate(normalise_sections(m.get("sections", []), ch.pdf_start, ch.pdf_end), start=1):
+    planned = sections_from_hints(ch, m.get("sections", [])) or m.get("sections", [])
+    for i, s in enumerate(normalise_sections(planned, ch.pdf_start, ch.pdf_end), start=1):
         sec = Section(chapter_id=ch.id, n=i, title=s["title"], pdf_start=s["pdf_start"], pdf_end=s["pdf_end"],
                       summary=s.get("summary"))
         db.add(sec)
