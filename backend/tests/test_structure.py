@@ -138,3 +138,21 @@ def test_short_doc_without_structure_is_one_chapter(monkeypatch):
     case = next(c for c in CASES if c.name == "no_structure")  # 30 plain pages
     specs, source, *_ = analyze(case)
     assert source == "whole document" and specs[0].pdf_start == 1 and specs[0].pdf_end == 30
+
+
+def test_section_hints_from_contents_lines():
+    """Chapters found without sub-entries get the contents lines inside their range as section hints."""
+    contents = "Contents\n\nSection 1 Introduction\n" + "\n".join(f"{t} ........ {p}" for t, p in [
+        ("Pharmacy and Pharmacopoeia", 3), ("Pharmacology", 9), ("Sources of Drugs", 15),
+        ("Vehicles in General", 31), ("Solid Vehicles", 37), ("Liquid Vehicles", 44)])
+    from tests.corpus import body, make
+    pages = ["Title", contents] + body({}, 58)
+    case = Case("hints", make(pages, number_from=3), "contents")
+    doc = pdf.open_pdf_bytes(case.pdf)
+    texts = [pdf.clean(p.get_text("text")) for p in doc]
+    offset = pdf.detect_offset([None] * doc.page_count, texts)
+    assert offset == 2
+    specs = [pdf.ChapterSpec("Section 1 Introduction", 5, 32), pdf.ChapterSpec("Section 2 Vehicles", 33, 60)]
+    structure.attach_section_hints(specs, texts, offset)
+    assert [c["title"] for c in specs[0].children] == ["Pharmacy and Pharmacopoeia", "Pharmacology", "Sources of Drugs"]
+    assert [c["pdf_page"] for c in specs[1].children] == [33, 39, 46]

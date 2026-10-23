@@ -159,6 +159,29 @@ CONTENTS_LINE = re.compile(r"^\s*(?P<title>\S.*?[A-Za-z].*?)\s*(?:\.{2,}|\u2026+
 
 def chapters_from_contents_text(texts: list[str], offset: int | None) -> list[pdf.ChapterSpec]:
     """No-model fallback: parse 'Title ...... 45' lines from the contents pages."""
+    starts = contents_text_entries(texts, offset)
+    if len(starts) < 2:
+        return []
+    n = len(texts)
+    return [pdf.ChapterSpec(title=t, pdf_start=p, pdf_end=(starts[j + 1][0] - 1 if j + 1 < len(starts) else n),
+                            kind=pdf.kind_for(t)) for j, (p, t) in enumerate(starts)]
+
+
+def attach_section_hints(specs: list[pdf.ChapterSpec], texts: list[str], offset: int | None) -> None:
+    """Give chapters without sub-entries the contents lines that fall inside them, so lessons follow the book's
+    own subdivisions (e.g. Section 1 -> chapters 1-1 ... 1-6) instead of guessed ones."""
+    entries = contents_text_entries(texts, offset)
+    for sp in specs:
+        if sp.children:
+            continue
+        inside = [{"title": t, "pdf_page": p} for p, t in entries
+                  if sp.pdf_start <= p <= sp.pdf_end and t.lower() not in sp.title.lower()]
+        if len(inside) >= 2:
+            sp.children = inside
+
+
+def contents_text_entries(texts: list[str], offset: int | None) -> list[tuple[int, str]]:
+    """Every 'Title ...... 45' entry on the contents pages, mapped to (pdf_page, title), in page order."""
     entries: list[tuple[str, int]] = []
     started = None
     for i, text in enumerate(texts[:40]):
@@ -186,11 +209,7 @@ def chapters_from_contents_text(texts: list[str], offset: int | None) -> list[pd
         p = printed_to_pdf(page, title, texts, offset)
         if p:
             starts.append((p, title))
-    if len(starts) < 2:
-        return []
-    n = len(texts)
-    return [pdf.ChapterSpec(title=t, pdf_start=p, pdf_end=(starts[j + 1][0] - 1 if j + 1 < len(starts) else n),
-                            kind=pdf.kind_for(t)) for j, (p, t) in enumerate(starts)]
+    return starts
 
 
 ContentsReader = Callable[..., list[pdf.ChapterSpec]]
@@ -220,6 +239,10 @@ def detect(doc: fitz.Document, texts: list[str], offset: int | None,
             continue
         specs = sanitize(specs, n)
         if specs and pdf.outline_usable(specs, n):
+            try:
+                attach_section_hints(specs, texts, offset)
+            except Exception as e:  # hints are a bonus; never fail detection over them
+                log.warning("section hints failed: %s", e)
             return collapse_short(specs, n), source
     if n <= SHORT_DOC_PAGES:
         return [pdf.ChapterSpec(title=WHOLE_DOCUMENT, pdf_start=1, pdf_end=n)], "whole document"
