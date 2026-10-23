@@ -43,7 +43,7 @@ class Prefs(BaseModel):
     name: str | None = Field(default=None, max_length=120)
     goal: str | None = Field(default=None, max_length=40)
     level_default: str | None = Field(default=None, pattern="^(simple|standard|exam)$")
-    daily_minutes: int | None = Field(default=None, ge=5, le=240)
+    daily_minutes: int | None = Field(default=None, ge=5, le=720)  # up to 12 h for intensive study
     target_recall: float | None = Field(default=None, ge=0.7, le=0.97)
     reminders: bool | None = None
     onboarded: bool | None = None

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
-import { Brand, ErrorBox, Spinner } from "../components";
+import { Brand, DailyTimePicker, ErrorBox, Spinner } from "../components";
 import { useMe } from "../state";
 import { UploadBox } from "./Library";
 
@@ -11,7 +11,6 @@ const goals = [
   { id: "work", level: "standard", title: "Work or a project", body: "Get to the useful parts quickly, with examples." },
   { id: "curious", level: "simple", title: "Curiosity", body: "Plain words and everyday examples. No jargon until it's needed." },
 ];
-const paces = [{ m: 10, label: "10 min" }, { m: 20, label: "20 min" }, { m: 45, label: "45 min" }];
 
 export default function Onboarding() {
   const { me, setMe } = useMe();
@@ -54,9 +53,9 @@ export default function Onboarding() {
           <div className="row gap-12"><button className="btn btn-primary" onClick={() => setStep(1)}>Continue</button></div>
         </div>}
         {step === 1 && <div className="stack gap-16">
-          <h1>How much time per day?</h1>
-          <p className="muted">We size each session and schedule flashcard reviews around it.</p>
-          <div className="seg" role="radiogroup" aria-label="Daily time">{paces.map((p) => <button key={p.m} role="radio" aria-checked={minutes === p.m} onClick={() => setMinutes(p.m)} style={{ padding: "12px 24px" }}>{p.label}</button>)}</div>
+          <h1>How much time can you give it each day?</h1>
+          <p className="muted">Anything from a short daily session to full study days. Cramming a textbook in a week? Pick 4 or 8 hours, or set your own. We size sessions and flashcard reviews around it, and you can change it in Settings.</p>
+          <DailyTimePicker value={minutes} onChange={setMinutes} />
           <label className="row gap-12" style={{ cursor: "pointer" }}><input type="checkbox" checked={reminders} onChange={(e) => setReminders(e.target.checked)} style={{ width: 20, height: 20 }} /><span><strong>Daily reminder</strong><br /><span className="small muted">An in-app nudge when cards are due.</span></span></label>
           <div className="row gap-12"><button className="btn btn-secondary" onClick={() => setStep(0)}>Back</button><button className="btn btn-primary" disabled={busy} onClick={async () => { await save(false); setStep(2); }}>{busy ? <Spinner /> : "Continue"}</button></div>
         </div>}

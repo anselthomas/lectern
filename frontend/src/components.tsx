@@ -211,3 +211,40 @@ export function Cover({ title, i = 0 }: { title: string; i?: number }) {
   const hash = [...title].reduce((a, c) => a + c.charCodeAt(0), i);
   return <div className="cover" style={{ background: coverColors[hash % coverColors.length] }} aria-hidden="true">{title.trim()[0]?.toUpperCase()}</div>;
 }
+
+const DAILY_PRESETS = [20, 60, 120, 240, 480];
+
+export function formatMinutes(m: number) {
+  if (m < 60) return `${m} min`;
+  const h = m / 60;
+  return `${Number.isInteger(h) ? h : h.toFixed(1)} h`;
+}
+
+/** Daily study time, from a short session to a full study day (max 12 h). Value is in minutes. */
+export function DailyTimePicker({ value, onChange }: { value: number; onChange: (minutes: number) => void }) {
+  const preset = DAILY_PRESETS.includes(value);
+  const [custom, setCustom] = useState(!preset);
+  const [hours, setHours] = useState(preset ? "" : String(+(value / 60).toFixed(2)));
+  const commit = (raw: string) => {
+    setHours(raw);
+    const h = parseFloat(raw);
+    if (h > 0) onChange(Math.round(Math.min(12, Math.max(0.25, h)) * 60));
+  };
+  return (
+    <div className="stack gap-12">
+      <div className="seg wrap" role="radiogroup" aria-label="Daily time">
+        {DAILY_PRESETS.map((m) => (
+          <button key={m} role="radio" aria-checked={!custom && value === m} style={{ padding: "12px 18px" }}
+            onClick={() => { setCustom(false); onChange(m); }}>{formatMinutes(m)}</button>))}
+        <button role="radio" aria-checked={custom} style={{ padding: "12px 18px" }} onClick={() => { setCustom(true); setHours(String(+(value / 60).toFixed(2))); }}>Custom</button>
+      </div>
+      {custom && (
+        <div className="row gap-8">
+          <input className="input mono" style={{ width: 110 }} type="number" min={0.25} max={12} step={0.25} aria-label="Hours per day"
+            value={hours} onChange={(e) => commit(e.target.value)} />
+          <span className="muted">hours a day (up to 12)</span>
+        </div>
+      )}
+    </div>
+  );
+}

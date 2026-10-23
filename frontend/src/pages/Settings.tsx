@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, download, showLimit } from "../api";
 import { signOut } from "../auth";
-import { ErrorBox, Loading, Modal, Spinner, Toast } from "../components";
+import { DailyTimePicker, ErrorBox, Loading, Modal, Spinner, Toast } from "../components";
 import { useMe } from "../state";
 
 function Meter({ label, used, limit, unit = "" }: { label: string; used: number; limit: number | null; unit?: string }) {
@@ -23,6 +23,7 @@ export default function Settings() {
   const [err, setErr] = useState<any>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [del, setDel] = useState(false);
+  const timer = useRef<number>();
   useEffect(() => { if (me && !form) setForm({ name: me.name ?? "", level_default: me.level_default, daily_minutes: me.daily_minutes, target_recall: me.target_recall, reminders: me.reminders }); }, [me]);
   if (!me || !form) return <Loading />;
   const u = me.usage;
@@ -47,8 +48,8 @@ export default function Settings() {
         <div className="stack gap-8"><strong>Default explanation level</strong><span className="small muted">Change per section any time</span>
           <div className="seg" role="radiogroup" aria-label="Default level">{[["simple", "Simple"], ["standard", "Standard"], ["exam", "Exam"]].map(([v, l]) =>
             <button key={v} role="radio" aria-checked={form.level_default === v} onClick={() => (v === "exam" && !canExam ? showLimit("Exam-level explanations need Pro.") : save({ level_default: v }))}>{l}{v === "exam" && !canExam ? " · Pro" : ""}</button>)}</div></div>
-        <div className="stack gap-8"><strong>Daily goal</strong><span className="small muted">Sets session length and review load</span>
-          <div className="seg" role="radiogroup" aria-label="Daily goal">{[10, 20, 45].map((m) => <button key={m} role="radio" aria-checked={form.daily_minutes === m} onClick={() => save({ daily_minutes: m })}>{m} min</button>)}</div></div>
+        <div className="stack gap-8"><strong>Daily goal</strong><span className="small muted">From 20 minutes to 12 hours. Sets session length and review load</span>
+          <DailyTimePicker value={form.daily_minutes} onChange={(m) => { setForm({ ...form, daily_minutes: m }); window.clearTimeout(timer.current); timer.current = window.setTimeout(() => save({ daily_minutes: m }), 700); }} /></div>
         <div className="stack gap-8"><strong>Target recall</strong><span className="small muted">Higher means more frequent reviews</span>
           <div className="seg" role="radiogroup" aria-label="Target recall">{[0.85, 0.9, 0.95].map((r) => <button key={r} role="radio" aria-checked={Math.abs(form.target_recall - r) < 0.001} onClick={() => save({ target_recall: r })}>{Math.round(r * 100)}%</button>)}</div></div>
         <label className="row gap-12" style={{ cursor: "pointer" }}><input type="checkbox" checked={form.reminders} onChange={(e) => save({ reminders: e.target.checked })} style={{ width: 20, height: 20 }} /><span><strong>Review reminders</strong><br /><span className="small muted">In-app reminders when cards are due</span></span></label>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ErrorBox, Loading } from "../components";
+import { ErrorBox, formatMinutes, Loading } from "../components";
 import { useApi } from "../state";
 
 const periods = [[14, "Last 14 days"], [30, "Last 30 days"], [100000, "All time"]] as const;
@@ -24,7 +24,7 @@ export default function Progress() {
       </div>
       {data.series.length > 0 && (
         <div className="card stack gap-12">
-          <div className="row between"><h3>Minutes studied per day</h3><span className="small muted">Goal: {data.goal_minutes} min a day</span></div>
+          <div className="row between"><h3>Minutes studied per day</h3><span className="small muted">Goal: {formatMinutes(data.goal_minutes)} a day</span></div>
           <div className="chart" role="img" aria-label="Minutes studied per day">
             <div style={{ position: "absolute", left: 0, right: 0, bottom: `${(data.goal_minutes / max) * 100}%`, borderTop: "1px dashed var(--line-3)" }} />
             {data.series.map((d: any) => (
