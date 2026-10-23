@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import Base, SessionLocal, engine
+from . import migrations
 from .limits import seed_plans
 from .routes import account, books, learn
 
@@ -38,6 +39,7 @@ async def unhandled(request: Request, exc: Exception):
 def startup() -> None:
     from . import models  # noqa: F401  (register tables)
     Base.metadata.create_all(engine)
+    migrations.run(engine)
     with SessionLocal() as db:
         seed_plans(db)
 

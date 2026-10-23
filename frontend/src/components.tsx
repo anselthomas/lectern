@@ -159,8 +159,11 @@ export function SourceViewer({ bookId, page, onClose, quote }: { bookId: string;
     return () => { if (url) URL.revokeObjectURL(url); };
   }, [bookId, n]);
   const save = async (kind: "highlight" | "citation_report") => {
-    await api(`/books/${bookId}/notes`, { body: { pdf_page: n, kind, quote: quote ?? null, text: kind === "citation_report" ? "Reported as a wrong citation" : null } });
-    setSaved(kind === "highlight" ? "Saved to your notes." : "Thanks — we've logged this citation for review.");
+    setErr(null); setSaved(null);
+    try {
+      await api(`/books/${bookId}/notes`, { body: { pdf_page: n, kind, quote: quote ?? null, text: kind === "citation_report" ? "Reported as a wrong citation" : null } });
+      setSaved(kind === "highlight" ? "Saved to your notes." : "Thanks — we've logged this citation for review.");
+    } catch (e) { setErr(e); }
   };
   return (
     <Modal onClose={onClose} wide label={`Source page ${meta?.label ?? n}`}>

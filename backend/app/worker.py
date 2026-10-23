@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import delete, insert, text
 
-from . import content, jobs, llm, pdf, structure, vectors
+from . import content, jobs, llm, migrations, pdf, structure, vectors
 from .db import SessionLocal, engine
 from .limits import record_tokens
 from .models import Base, Book, Chapter, Chunk, Lesson, Notification, Page, Section, User
@@ -248,6 +248,7 @@ def loop(name: str) -> None:
 
 def main() -> None:
     Base.metadata.create_all(engine)
+    migrations.run(engine)
     with SessionLocal() as db:
         jobs.release_stale(db, minutes=0)  # single worker process: anything "running" now was cut off by a restart
         db.execute(text("UPDATE books SET embed_status = 'pending' WHERE embed_status = 'running'"))

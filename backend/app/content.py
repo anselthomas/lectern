@@ -313,7 +313,8 @@ def prequestion_plan(ch: Chapter, rating: str, answer: str, default_level: str) 
     prompt = (
         f'Chapter "{ch.title}". Sections:\n{sections}\nKey ideas: {", ".join((ch.map or {}).get("key_ideas", []))}\n\n'
         f'The learner rated their prior knowledge as "{rating}" and wrote: "{answer or "(nothing)"}".\n'
-        f"Their default explanation level is {default_level}. Suggest a level, up to 3 things to focus on, and a "
+        f"Their default explanation level is {default_level}. Suggest a level (if the chapter is new to them, suggest "
+        "simple; if they know it fairly well and their default is exam, keep exam), up to 3 things to focus on, and a "
         "one-or-two-sentence plan addressed to them (e.g. 'We'll start with ... and spend extra time on ...'). "
         "If they wrote a misconception, gently name it in the plan."
     )

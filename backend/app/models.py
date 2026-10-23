@@ -230,7 +230,7 @@ class Note(Base):
     book_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), index=True)
     chapter_n: Mapped[int | None] = mapped_column(Integer)
     pdf_page: Mapped[int | None] = mapped_column(Integer)
-    kind: Mapped[str] = mapped_column(String(12), default="note")  # note | highlight | citation_report
+    kind: Mapped[str] = mapped_column(String(20), default="note")  # note | highlight | citation_report
     quote: Mapped[str | None] = mapped_column(Text)
     text: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

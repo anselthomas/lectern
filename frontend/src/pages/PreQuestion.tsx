@@ -40,7 +40,7 @@ export default function PreQuestion() {
       {err && <ErrorBox error={err} />}
       <div className="stack gap-8" role="radiogroup" aria-label="What you know">
         {levels.map((l) => (
-          <button key={l.id} className="option" role="radio" aria-checked={rating === l.id} onClick={() => setRating(l.id)} disabled={!!plan}>
+          <button key={l.id} className="option" role="radio" aria-label={`${l.title}: ${l.sub}`} aria-checked={rating === l.id} onClick={() => setRating(l.id)} disabled={!!plan}>
             <span className="stack gap-4"><span>{l.title}</span><span className="small muted" style={{ fontWeight: 500 }}>{l.sub}</span></span>
           </button>))}
       </div>

@@ -46,7 +46,7 @@ export default function Onboarding() {
           <p className="muted">This sets the default explanation level. You can change it on any section.</p>
           <div className="stack gap-8" role="radiogroup" aria-label="Goal">
             {goals.map((g) => (
-              <button key={g.id} className="option" role="radio" aria-checked={goal === g.id} onClick={() => setGoal(g.id)}>
+              <button key={g.id} className="option" role="radio" aria-label={`${g.title}: ${g.body}`} aria-checked={goal === g.id} onClick={() => setGoal(g.id)}>
                 <span className="stack gap-4"><span>{g.title} {g.pro && !canExam && <span className="badge badge-accent">Pro for exam level</span>}</span><span className="small muted" style={{ fontWeight: 500 }}>{g.body}</span></span>
               </button>))}
           </div>
