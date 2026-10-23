@@ -6,14 +6,15 @@ import { useMe } from "../state";
 
 const LEVELS = [["simple", "Simple"], ["standard", "Standard"], ["exam", "Exam"]];
 
-function QuickCheck({ q, i, total, onOpen }: { q: any; i: number; total: number; onOpen: (p: number) => void }) {
+function QuickCheck({ q, i, total, onOpen, compact, id }: { q: any; i: number; total: number; onOpen: (p: number) => void; compact?: boolean; id?: string }) {
   const [pick, setPick] = useState<number | null>(null);
   const [checked, setChecked] = useState(false);
   const right = pick === q.answer_index;
+  const hid = id ?? `qc-${i}`;
   return (
-    <section className="card stack gap-16" aria-labelledby={`qc-${i}`}>
-      <div className="row between"><h2 id={`qc-${i}`} className="eyebrow" style={{ fontSize: 13 }}>Quick check</h2><span className="small muted">{i + 1} of {total}</span></div>
-      <p style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.45 }}>{q.question}</p>
+    <section className={`card stack ${compact ? "gap-12" : "gap-16"}`} style={compact ? { padding: 14 } : undefined} aria-labelledby={hid}>
+      <div className="row between"><h2 id={hid} className="eyebrow" style={{ fontSize: compact ? 11 : 13 }}>{compact ? "Tutor quiz" : "Quick check"}</h2>{!compact && <span className="small muted">{i + 1} of {total}</span>}</div>
+      <p style={{ fontSize: compact ? 15 : 18, fontWeight: 700, lineHeight: 1.45 }}>{q.question}</p>
       <div className="stack gap-8" role="radiogroup" aria-label="Answer">
         {q.options.map((o: string, k: number) => {
           const cls = checked ? (k === q.answer_index ? " correct" : k === pick ? " wrong" : "") : "";
@@ -40,7 +41,7 @@ function Tutor({ bookId, chapterId, sectionId, level, onOpen, onClose }: { bookI
     setLog((l) => [...l, { role: "user", text: message }]);
     try {
       const r = await api("/tutor", { body: { book_id: bookId, chapter_id: chapterId, section_id: sectionId, message, level } });
-      setLog((l) => [...l, { role: "assistant", text: r.answer, citations: r.citations, follow_ups: r.follow_ups, in_book: r.in_book }]);
+      setLog((l) => [...l, { role: "assistant", text: r.answer, citations: r.citations, follow_ups: r.follow_ups, in_book: r.in_book, quiz: r.quiz }]);
     } catch (e) {
       setLog((l) => l.slice(0, -1)); setText(message);
       if (!(e instanceof ApiError && e.status === 402)) setErr(e);
@@ -60,6 +61,7 @@ function Tutor({ bookId, chapterId, sectionId, level, onOpen, onClose }: { bookI
         {log.map((m, i) => m.role === "user" ? <div key={i} className="bubble-me">{m.text}</div> : (
           <div key={i} className="stack gap-8" style={{ maxWidth: "94%" }}>
             <div className="bubble-ai"><RichBlock text={m.text} /></div>
+            {m.quiz && <QuickCheck q={m.quiz} i={0} total={1} compact id={`tq-${i}`} onOpen={(p) => onOpen(p)} />}
             {m.citations?.length > 0 && <div className="row gap-4 wrap">{m.citations.map((c: any) => <PageChip key={c.pdf_page} page={c.pdf_page} label={c.label} onOpen={(p) => onOpen(p, m.text.slice(0, 140))} />)}</div>}
           </div>))}
         {busy && <div className="row gap-8 small muted"><Spinner />Looking through the book…</div>}

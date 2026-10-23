@@ -372,7 +372,16 @@ TUTOR_SCHEMA = {"type": "object", "required": ["answer", "citations", "in_book"]
     "answer": {"type": "string", "description": "Answer in 2-6 sentences. Use **bold** for key terms."},
     "citations": {"type": "array", "maxItems": 4, "items": {"type": "integer"}},
     "in_book": {"type": "boolean", "description": "False if the excerpts don't cover the question"},
-    "follow_ups": {"type": "array", "maxItems": 3, "items": {"type": "string"}}}}
+    "follow_ups": {"type": "array", "maxItems": 3, "items": {"type": "string"}},
+    "quiz": {"type": "object", "description": "Fill ONLY when the learner asks to be quizzed or tested",
+             "required": ["question", "options", "answer_index", "explanation", "page"], "properties": {
+                 "question": {"type": "string"},
+                 "options": {"type": "array", "minItems": 3, "maxItems": 4, "items": {"type": "string"}},
+                 "answer_index": {"type": "integer", "description": "0-based index of the correct option"},
+                 "explanation": {"type": "string"},
+                 "page": {"type": "integer"}}}}}
+
+QUIZ_REQUEST = re.compile(r"\b(quiz|test) me\b|\bask me (a|some|one)\b|\bquiz\b.*\b(question|on|about)\b|^\s*quiz\b", re.I)
 
 SYSTEM_TUTOR = (
     "You are the Lectern tutor. Answer ONLY from the book excerpts provided. If the excerpts don't contain the "
@@ -391,15 +400,31 @@ def tutor_answer(book: Book, excerpts: list[dict], history: list[dict], question
                  chapter_title: str | None, level: str) -> tuple[dict, llm.Usage]:
     ex = "\n".join(f'<page n="{e["pdf_page"]}" printed="{e["label"]}">\n{e["text"]}\n</page>' for e in excerpts)
     convo = "\n".join(f'{m["role"]}: {m["text"]}' for m in history[-6:])
+    wants_quiz = bool(QUIZ_REQUEST.search(question))
     prompt = (
         f'Book: "{book.title}". The learner is currently studying {chapter_title or "the book"}. Explanation level: {level}. '
         f"{LEVELS[level]}\n\nRecent conversation:\n{convo or '(none)'}\n\nExcerpts:\n{ex}\n\n"
-        f"Learner's question: {question}"
+        f"Learner's message: {question}"
+        + ("\n\nThe learner wants to be quizzed: you MUST fill the quiz field with one multiple-choice question that "
+           "tests understanding of the excerpts, and keep answer to one short encouraging line. Do not explain the "
+           "topic in answer." if wants_quiz else "")
     )
     data, usage = llm.call_json(system=SYSTEM_TUTOR, prompt=prompt, schema=TUTOR_SCHEMA, tool_name="reply",
                                 max_tokens=900)
     allowed = {e["pdf_page"] for e in excerpts}
     data["citations"] = [p for p in dict.fromkeys(data.get("citations", [])) if p in allowed][:4]
+    quiz = data.get("quiz")
+    if quiz:
+        opts = quiz.get("options") or []
+        try:
+            ok = 3 <= len(opts) <= 5 and 0 <= int(quiz.get("answer_index", -1)) < len(opts) and quiz.get("question")
+        except (TypeError, ValueError):
+            ok = False
+        if ok:
+            quiz["page"] = quiz.get("page") if quiz.get("page") in allowed else None
+            data["quiz"] = quiz
+        else:
+            data.pop("quiz", None)
     return data, usage
 
 

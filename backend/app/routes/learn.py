@@ -422,13 +422,18 @@ def ask_tutor(body: Ask, user: User = Depends(current_user), db: Session = Depen
             where = f"chapter {chapter.n} \"{chapter.title}\""
         data, usage = content.tutor_answer(book, excerpts, history, body.message, where, level)
     citations = [{"pdf_page": p, "label": label_for(db, book.id, p)} for p in data.get("citations", [])]
+    quiz = data.get("quiz")
+    if quiz:
+        quiz["page_label"] = label_for(db, book.id, quiz.get("page"))
+    # History keeps the quiz question as text so the next turn has the context.
+    stored = data["answer"] + (f"\n\nQuiz: {quiz['question']} Options: " + " / ".join(quiz["options"]) if quiz else "")
     db.add(ChatMessage(user_id=user.id, book_id=book.id, role="user", text=body.message))
-    db.add(ChatMessage(user_id=user.id, book_id=book.id, role="assistant", text=data["answer"], citations=citations))
+    db.add(ChatMessage(user_id=user.id, book_id=book.id, role="assistant", text=stored, citations=citations))
     usage_row.tutor_messages += 1
     record_tokens(db, user, usage.tokens_in, usage.tokens_out)
     db.commit()
     return {"answer": data["answer"], "citations": citations, "in_book": data.get("in_book", True),
-            "follow_ups": data.get("follow_ups", [])}
+            "follow_ups": data.get("follow_ups", []), "quiz": quiz}
 
 
 @router.get("/tutor/{book_id}/history")
