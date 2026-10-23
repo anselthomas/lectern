@@ -16,7 +16,7 @@ from .models import Book, Chapter, Lesson, Page, Section
 log = logging.getLogger("lectern.content")
 
 LEVELS = {
-    "simple": "Explain in plain, everyday words for a beginner. Short sentences, one idea at a time, a concrete everyday example. Define any technical term the first time it appears.",
+    "simple": "Explain in plain, everyday words for a complete beginner. Open with an everyday analogy, then use short sentences, one idea at a time. Avoid jargon; define any technical term in simple words the first time it appears.",
     "standard": "Explain clearly at the level of a good textbook for a motivated student. Use the book's terms precisely, with one worked example where it helps.",
     "exam": "Explain rigorously for exam preparation: exact definitions, formulas and conditions, a worked example, and the common mistakes or traps examiners test.",
 }
@@ -156,6 +156,17 @@ def normalise_sections(raw: list[dict], start: int, end: int) -> list[dict]:
     return out
 
 
+def _shingles(text: str, n: int = 12) -> set[tuple[str, ...]]:
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return {tuple(words[i:i + n]) for i in range(len(words) - n + 1)}
+
+
+def copied_blocks(blocks: list[dict], source: str, n: int = 12) -> int:
+    """How many lesson blocks reproduce a run of n+ consecutive words from the source pages."""
+    src = _shingles(source, n)
+    return sum(1 for b in blocks if b.get("type") != "key_term" and _shingles(b.get("text", ""), n) & src)
+
+
 def generate_lesson(db: Session, book: Book, ch: Chapter, sec: Section, level: str,
                     background: bool) -> tuple[dict, llm.Usage]:
     text, labels = pages_text(db, book.id, sec.pdf_start, sec.pdf_end, max_chars=90_000)
@@ -167,10 +178,22 @@ def generate_lesson(db: Session, book: Book, ch: Chapter, sec: Section, level: s
         "paragraphs (2-5 sentences each), 1-3 key_term blocks (term + one-sentence definition), and an example "
         "or formula where the book has one. Each block cites the page it draws on. Then write 2 quick-check "
         "multiple-choice questions that test understanding (not recall of wording), with the correct "
-        "answer_index (0-based), a one-sentence explanation and the page.\n\n" + text
+        "answer_index (0-based), a one-sentence explanation and the page.\n"
+        "Rules: teach in your own words; never copy the book's sentences (a key_term definition may quote at most "
+        "15 words). Every fact, number and formula must come from these pages; do not bring in material from other "
+        "parts of the book or general knowledge. Examples and formulas must be ones the pages give, except an "
+        "everyday analogy, which you must introduce as an analogy ('Think of it like ...').\n\n" + text
     )
     data, usage = llm.call_json(system=SYSTEM_TEACHER, prompt=prompt, schema=LESSON_SCHEMA, tool_name="lesson",
                                 max_tokens=5000, background=background)
+    if copied_blocks(data.get("blocks", []), text) > 1:
+        retry, u2 = llm.call_json(
+            system=SYSTEM_TEACHER, schema=LESSON_SCHEMA, tool_name="lesson", max_tokens=5000, background=background,
+            prompt=prompt + "\n\nA previous draft copied whole sentences from the book. Rewrite every block in your "
+                            "own words: explain, don't transcribe.")
+        usage.add(u2)
+        if copied_blocks(retry.get("blocks", []), text) < copied_blocks(data.get("blocks", []), text):
+            data = retry
     lo, hi = sec.pdf_start, sec.pdf_end
     for b in data.get("blocks", []):
         b["page"] = clamp(b.get("page"), lo, hi)
