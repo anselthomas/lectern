@@ -228,3 +228,11 @@ def chapters_from_headings(texts: list[str]) -> list[ChapterSpec]:
         return []
     return [ChapterSpec(title=t, pdf_start=p, pdf_end=(starts[j + 1][0] - 1 if j + 1 < len(starts) else len(texts)))
             for j, (p, t) in enumerate(starts)]
+
+
+def title_from_filename(filename: str) -> str:
+    """'principles-economics_3e.pdf' -> 'Principles Economics 3e'."""
+    import os
+    stem = os.path.splitext(os.path.basename(filename or ""))[0]
+    words = stem.replace("_", " ").replace("-", " ").split()
+    return " ".join(w if w.isupper() else w.capitalize() for w in words)[:300] or "Untitled book"

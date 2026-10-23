@@ -8,7 +8,7 @@ import time
 import traceback
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, insert
+from sqlalchemy import delete, insert, text
 
 from . import content, jobs, llm, pdf, structure, vectors
 from .db import SessionLocal, engine
@@ -68,6 +68,8 @@ def ingest_book(book_id: str) -> None:
         meta_title = ((doc.metadata or {}).get("title") or "").strip()
         if len(meta_title) > 3 and not pdf.junk_title(meta_title):
             book.title = meta_title[:300]
+        elif pdf.junk_title(book.title):  # e.g. an earlier run stored "Prepage.pmd"
+            book.title = pdf.title_from_filename(book.filename)
         db.commit()
 
         texts, labels = [], []
@@ -126,45 +128,58 @@ def ingest_book(book_id: str) -> None:
 
 def embed_book(book_id: str) -> None:
     with SessionLocal() as db:
-        book = db.get(Book, book_id)
-        if book is None:
+        # Atomic claim: duplicate jobs (e.g. released after a restart) find the book already running/done and stop.
+        claimed = db.execute(text(
+            "UPDATE books SET embed_status = 'running', embedded_chunks = 0 "
+            "WHERE id = :id AND embed_status IN ('pending', 'failed') RETURNING id"), {"id": book_id}).first()
+        db.commit()
+        if not claimed:
             return
-        book.embed_status, book.embedded_chunks = "running", 0
-        db.commit()
-        chapters = [(c.n, c.pdf_start, c.pdf_end) for c in db.query(Chapter).filter_by(book_id=book.id)]
+        book = db.get(Book, book_id)
+        try:
+            _embed(db, book)
+        except Exception:
+            db.rollback()
+            db.execute(text("UPDATE books SET embed_status = 'failed' WHERE id = :id"), {"id": book_id})
+            db.commit()
+            raise
 
-        def chapter_of(p):
-            for n, a, b in chapters:
-                if a <= p <= b:
-                    return n
-            return None
 
-        rows = []
-        for page in db.query(Page).filter_by(book_id=book.id).order_by(Page.pdf_page):
-            for text in pdf.chunk_page(page.text):
-                rows.append({"book_id": book.id, "n": len(rows), "chapter_n": chapter_of(page.pdf_page),
-                             "pdf_page": page.pdf_page, "text": text})
-        db.execute(delete(Chunk).where(Chunk.book_id == book.id))
-        for i in range(0, len(rows), 500):
-            db.execute(insert(Chunk), rows[i:i + 500])
-        db.commit()
+def _embed(db, book: Book) -> None:
+    chapters = [(c.n, c.pdf_start, c.pdf_end) for c in db.query(Chapter).filter_by(book_id=book.id)]
 
-        done = 0
-        with cf.ThreadPoolExecutor(max_workers=6) as pool:
-            for i in range(0, len(rows), 200):
-                batch = rows[i:i + 200]
-                embs = list(pool.map(lambda r: llm.embed(r["text"]), batch))
-                vectors.put([{"key": f"{book.id}:{r['n']}", "embedding": e, "user_id": str(book.user_id),
-                              "book_id": str(book.id), "chapter_n": r["chapter_n"], "pdf_page": r["pdf_page"]}
-                             for r, e in zip(batch, embs)])
-                done += len(batch)
-                if not book_exists(db, book.id):  # deleted mid-way; the delete already removed its vectors
-                    return
-                book.embedded_chunks = done
-                db.commit()
-        book.embed_status = "done"
-        db.commit()
-        log.info("embedded %s chunks for %s", done, book.id)
+    def chapter_of(p):
+        for n, a, b in chapters:
+            if a <= p <= b:
+                return n
+        return None
+
+    rows = []
+    for page in db.query(Page).filter_by(book_id=book.id).order_by(Page.pdf_page):
+        for chunk in pdf.chunk_page(page.text):
+            rows.append({"book_id": book.id, "n": len(rows), "chapter_n": chapter_of(page.pdf_page),
+                         "pdf_page": page.pdf_page, "text": chunk})
+    db.execute(delete(Chunk).where(Chunk.book_id == book.id))
+    for i in range(0, len(rows), 500):
+        db.execute(insert(Chunk), rows[i:i + 500])
+    db.commit()
+
+    done = 0
+    with cf.ThreadPoolExecutor(max_workers=6) as pool:
+        for i in range(0, len(rows), 200):
+            batch = rows[i:i + 200]
+            embs = list(pool.map(lambda r: llm.embed(r["text"]), batch))
+            vectors.put([{"key": f"{book.id}:{r['n']}", "embedding": e, "user_id": str(book.user_id),
+                          "book_id": str(book.id), "chapter_n": r["chapter_n"], "pdf_page": r["pdf_page"]}
+                         for r, e in zip(batch, embs)])
+            done += len(batch)
+            if not book_exists(db, book.id):  # deleted mid-way; the delete already removed its vectors
+                return
+            book.embedded_chunks = done
+            db.commit()
+    book.embed_status = "done"
+    db.commit()
+    log.info("embedded %s chunks for %s", done, book.id)
 
 
 # ---------------------------------------------------------------- chapter build
@@ -234,7 +249,9 @@ def loop(name: str) -> None:
 def main() -> None:
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
-        jobs.release_stale(db)
+        jobs.release_stale(db, minutes=0)  # single worker process: anything "running" now was cut off by a restart
+        db.execute(text("UPDATE books SET embed_status = 'pending' WHERE embed_status = 'running'"))
+        db.commit()
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     threads = [threading.Thread(target=loop, args=(f"w{i}",), daemon=True) for i in range(3)]
     for t in threads:

@@ -44,12 +44,13 @@ def test_structure(case: Case):
 
 @pytest.mark.parametrize("case", CASES, ids=[c.name for c in CASES])
 def test_outline_invariants(case: Case):
-    """Whatever the input, the outline is sorted, non-overlapping and inside the document."""
+    """Whatever the input, the outline is sorted, contiguous, non-overlapping and inside the document."""
     specs, _, _, _, n = analyze(case)
     prev_end = 0
     for s in specs:
         assert 1 <= s.pdf_start <= s.pdf_end <= n, (s.title, s.pdf_start, s.pdf_end, n)
         assert s.pdf_start > prev_end, "overlap"
+        assert prev_end == 0 or s.pdf_start == prev_end + 1, f"gap before {s.title!r}"
         assert s.title.strip()
         prev_end = s.pdf_end
 

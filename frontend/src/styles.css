@@ -225,5 +225,14 @@ mark { background: #fff1b8; color: inherit; padding: 0 2px; border-radius: 3px; 
 .page-img { width: 100%; height: auto; display: block; border-radius: 6px; box-shadow: 0 1px 3px rgba(18,21,28,.12); background: #fff; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.table { table-layout: fixed; }
 .table td .input { width: 100%; }
+
+/* Chapter editor: rows become stacked cards on narrow screens */
+@media (max-width: 720px) {
+  .table-stack thead { display: none; }
+  .table-stack, .table-stack tbody { display: block; }
+  .table-stack tr { display: grid; grid-template-columns: 28px 1fr; gap: 8px 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .table-stack td { display: block; padding: 0; border: 0; }
+  .table-stack td:nth-child(2) { display: none; }
+  .table-stack td:nth-child(n+3) { grid-column: 2; }
+}

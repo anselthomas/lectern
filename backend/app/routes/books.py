@@ -88,8 +88,7 @@ def create_book(body: NewBook, user: User = Depends(current_user), db: Session =
     if not body.filename.lower().endswith(".pdf"):
         raise HTTPException(400, {"code": "not_pdf", "message": "Only PDF files are supported."})
     check_new_book(db, user, body.size)
-    stem = os.path.splitext(os.path.basename(body.filename))[0]
-    title = " ".join(w if w.isupper() else w.capitalize() for w in stem.replace("_", " ").replace("-", " ").split()) or "Untitled"
+    title = pdf.title_from_filename(body.filename)
     book = Book(user_id=user.id, title=title[:300], filename=body.filename[:300], s3_key="", bytes=body.size)
     db.add(book)
     db.flush()

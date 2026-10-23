@@ -247,6 +247,8 @@ def sanitize(specs: list[pdf.ChapterSpec], page_count: int) -> list[pdf.ChapterS
             if start == out[-1].pdf_start:
                 continue  # duplicate start: keep the first
             out[-1].pdf_end = start - 1
+        elif out and start > out[-1].pdf_end + 1:
+            out[-1].pdf_end = start - 1  # close gaps so no pages fall outside every chapter
         sp.pdf_start, sp.pdf_end = start, end
         sp.title = (sp.title or "").strip()[:300] or f"Part {len(out) + 1}"
         out.append(sp)

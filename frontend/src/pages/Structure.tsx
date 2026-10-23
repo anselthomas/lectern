@@ -138,7 +138,7 @@ export default function Structure() {
               {rows.some((r) => r.check_note) && <div className="alert alert-warn">{rows.filter((r) => r.check_note).length} item to check. {rows.find((r) => r.check_note)?.check_note}</div>}
               {issues.length > 0 && <div className="alert alert-error">{issues[0]}</div>}
               <div style={{ overflowX: "auto" }}>
-                <table className="table">
+                <table className="table table-stack">
                   <thead><tr><th style={{ width: 36 }}><span className="sr-only">Select</span></th><th style={{ width: 32 }}>#</th><th>Title</th><th style={{ width: 210 }}>Pages (PDF)</th><th style={{ width: 128 }}>Type</th><th style={{ width: 120 }}>Status</th></tr></thead>
                   <tbody>{rows.map((r, i) => {
                     const built = book.chapters?.find((c: any) => c.id === r.key);
