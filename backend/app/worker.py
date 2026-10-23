@@ -9,6 +9,7 @@ import traceback
 from datetime import datetime, timezone
 
 from sqlalchemy import delete, insert, text
+from sqlalchemy.exc import IntegrityError
 
 from . import content, jobs, llm, migrations, pdf, structure, vectors
 from .db import SessionLocal, engine
@@ -186,13 +187,16 @@ def _embed(db, book: Book) -> None:
 
 def build_chapter(chapter_id: str, level: str = "standard") -> None:
     with SessionLocal() as db:
-        ch = db.get(Chapter, chapter_id)
-        if ch is None:
+        # Atomic claim: a second job for the same chapter (double click, retry, re-queue) finds it taken and stops.
+        claimed = db.execute(text(
+            "UPDATE chapters SET status = 'building', status_detail = NULL "
+            "WHERE id = :id AND status IN ('queued', 'pending', 'failed') RETURNING id"), {"id": chapter_id}).first()
+        db.commit()
+        if not claimed:
             return
+        ch = db.get(Chapter, chapter_id)
         book = db.get(Book, ch.book_id)
         user = db.get(User, book.user_id)
-        ch.status, ch.status_detail = "building", None
-        db.commit()
         try:
             usage = content.build_chapter(db, book, ch, level)
         except Exception as e:
@@ -218,10 +222,16 @@ def build_lesson(section_id: str, level: str) -> None:
         book = db.get(Book, ch.book_id)
         if db.query(Lesson).filter_by(section_id=sec.id, level=level).first():
             return
+        if ch.status in ("queued", "building"):
+            return  # the chapter build is writing every lesson right now
         body, usage = content.generate_lesson(db, book, ch, sec, level, background=False)
-        db.add(Lesson(section_id=sec.id, level=level, body=body, model=llm.settings.text_model))
-        record_tokens(db, db.get(User, book.user_id), usage.tokens_in, usage.tokens_out)
-        db.commit()
+        try:
+            db.add(Lesson(section_id=sec.id, level=level, body=body, model=llm.settings.text_model))
+            record_tokens(db, db.get(User, book.user_id), usage.tokens_in, usage.tokens_out)
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # section replaced by a rebuild, or another job saved this lesson first
+            log.info("lesson for section %s/%s no longer needed", section_id, level)
 
 
 HANDLERS = {"ingest_book": ingest_book, "embed_book": embed_book, "build_chapter": build_chapter,
@@ -252,6 +262,7 @@ def main() -> None:
     with SessionLocal() as db:
         jobs.release_stale(db, minutes=0)  # single worker process: anything "running" now was cut off by a restart
         db.execute(text("UPDATE books SET embed_status = 'pending' WHERE embed_status = 'running'"))
+        db.execute(text("UPDATE chapters SET status = 'queued' WHERE status = 'building'"))
         db.commit()
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     threads = [threading.Thread(target=loop, args=(f"w{i}",), daemon=True) for i in range(3)]

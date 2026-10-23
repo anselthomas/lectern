@@ -126,7 +126,8 @@ def get_section(section_id: str, level: str | None = None, user: User = Depends(
     status = "ready"
     if lesson is None:
         status = "building"
-        if not lesson_job_pending(db, sec.id, level):
+        # While the chapter itself is building, its lessons are on the way; don't queue duplicates.
+        if ch.status not in ("queued", "building") and not lesson_job_pending(db, sec.id, level):
             jobs.enqueue(db, "build_lesson", section_id=sec.id, level=level)
             db.commit()
     p = db.get(Progress, (user.id, ch.id))
