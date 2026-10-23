@@ -7,7 +7,7 @@ REGION=ap-southeast-2
 export MSYS_NO_PATHCONV=1 PYTHONUTF8=1
 IID=$(aws cloudformation describe-stacks --stack-name lectern-core --region $REGION --profile "$PROFILE" \
   --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" --output text)
-PARAMS=$(python -c "import json,sys;print(json.dumps({'commands':open(sys.argv[1],encoding='utf-8').read().split('\n'),'executionTimeout':['1800']}))" "$SCRIPT")
+PARAMS=$(python -c "import json,sys;print(json.dumps({'commands':sys.stdin.read().split('\n'),'executionTimeout':['1800']}))" < "$SCRIPT")
 CID=$(aws ssm send-command --instance-ids "$IID" --document-name AWS-RunShellScript --timeout-seconds 1800 \
   --parameters "$PARAMS" --region $REGION --profile "$PROFILE" --query Command.CommandId --output text)
 while true; do

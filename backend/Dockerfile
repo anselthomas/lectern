@@ -11,6 +11,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY app ./app
+COPY tests ./tests
 
 RUN useradd --create-home --uid 10001 lectern && mkdir -p /data/cache && chown -R lectern /data
 USER lectern

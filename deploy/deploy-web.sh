@@ -3,6 +3,7 @@
 set -euo pipefail
 PROFILE=${1:-lectern}
 REGION=ap-southeast-2
+export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/../frontend"
 out() { aws cloudformation describe-stacks --stack-name lectern-core --region $REGION --profile "$PROFILE" \
   --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
