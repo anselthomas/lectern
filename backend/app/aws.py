@@ -22,7 +22,7 @@ def bedrock():
     return boto3.client(
         "bedrock-runtime",
         region_name=settings.bedrock_region,
-        config=Config(read_timeout=300, retries={"max_attempts": 2, "mode": "standard"}),
+        config=Config(read_timeout=300, max_pool_connections=32, retries={"max_attempts": 2, "mode": "standard"}),
     )
 
 

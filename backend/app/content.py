@@ -94,18 +94,26 @@ LESSON_SCHEMA = {
 }
 
 QUIZ_SCHEMA = {
-    "type": "object", "required": ["questions"],
-    "properties": {"questions": {"type": "array", "minItems": 6, "maxItems": 12, "items": {
-        "type": "object", "required": ["type", "section_n", "question", "explanation", "page"],
-        "properties": {
-            "type": {"type": "string", "enum": ["mcq", "short"]},
-            "section_n": {"type": "integer"},
-            "question": {"type": "string"},
-            "options": {"type": "array", "items": {"type": "string"}},
-            "answer_index": {"type": "integer"},
-            "model_answer": {"type": "string"},
-            "explanation": {"type": "string"},
-            "page": {"type": "integer"}}}}},
+    "type": "object", "required": ["multiple_choice", "short_answer"],
+    "properties": {
+        "multiple_choice": {"type": "array", "minItems": 5, "maxItems": 8, "items": {
+            "type": "object", "required": ["section_n", "question", "options", "answer_index", "explanation", "page"],
+            "properties": {
+                "section_n": {"type": "integer"},
+                "question": {"type": "string"},
+                "options": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "string"}},
+                "answer_index": {"type": "integer", "description": "0-based index of the correct option"},
+                "explanation": {"type": "string"},
+                "page": {"type": "integer"}}}},
+        "short_answer": {"type": "array", "minItems": 2, "maxItems": 4, "items": {
+            "type": "object", "required": ["section_n", "question", "model_answer", "explanation", "page"],
+            "properties": {
+                "section_n": {"type": "integer"},
+                "question": {"type": "string"},
+                "model_answer": {"type": "string"},
+                "explanation": {"type": "string"},
+                "page": {"type": "integer"}}}},
+    },
 }
 
 
@@ -179,14 +187,16 @@ def build_quiz(db: Session, book: Book, ch: Chapter, sections: list[Section]) ->
     outline = "\n".join(f"{s.n}. {s.title} (n={s.pdf_start}..{s.pdf_end})" for s in sections)
     prompt = (
         f'Book: "{book.title}". Chapter {ch.n}: "{ch.title}". Sections:\n{outline}\n\n'
-        "Write a 10-question chapter quiz: 7 multiple-choice (4 options, answer_index 0-based) and 3 short-answer "
+        "Write a 10-question chapter quiz: 7 multiple_choice (exactly 4 options, answer_index 0-based) and 3 short_answer "
         "(model_answer of 1-2 sentences, graded for the idea). Spread questions across all sections, test "
         "understanding and application, and give each a one-sentence explanation and the page it comes from.\n\n" + text
     )
     data, usage = llm.call_json(system=SYSTEM_TEACHER, prompt=prompt, schema=QUIZ_SCHEMA, tool_name="quiz",
                                 max_tokens=5000, background=True)
+    raw = ([{**q, "type": "mcq"} for q in data.get("multiple_choice", [])]
+           + [{**q, "type": "short"} for q in data.get("short_answer", [])])
     out = []
-    for i, q in enumerate(data.get("questions", [])):
+    for i, q in enumerate(raw):
         q["id"] = f"q{i + 1}"
         q["page"] = clamp(q.get("page"), ch.pdf_start, ch.pdf_end)
         q["page_label"] = labels.get(q["page"]) if q["page"] else None

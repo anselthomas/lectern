@@ -182,7 +182,7 @@ def embed_book(book_id: str) -> None:
         db.commit()
 
         done = 0
-        with cf.ThreadPoolExecutor(max_workers=8) as pool:
+        with cf.ThreadPoolExecutor(max_workers=6) as pool:
             for i in range(0, len(rows), 200):
                 batch = rows[i:i + 200]
                 embs = list(pool.map(lambda r: llm.embed(r["text"]), batch))

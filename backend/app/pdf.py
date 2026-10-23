@@ -63,7 +63,9 @@ def kind_for(title: str) -> str:
 
 
 def chapters_from_outline(doc: fitz.Document) -> list[ChapterSpec]:
-    toc = [(lvl, title.strip(), page) for lvl, title, page in doc.get_toc(simple=True) if page and page > 0]
+    # Drop junk entries some exporters add, like a bookmark named after the file itself.
+    toc = [(lvl, title.strip(), page) for lvl, title, page in doc.get_toc(simple=True)
+           if page and page > 0 and title.strip() and not title.strip().lower().endswith(".pdf")]
     if not toc:
         return []
     levels = Counter(lvl for lvl, _, _ in toc)
@@ -71,7 +73,7 @@ def chapters_from_outline(doc: fitz.Document) -> list[ChapterSpec]:
     # Books split into a few "Parts" put chapters one level down.
     if levels[top] < 3 and levels.get(top + 1, 0) >= 3:
         top += 1
-    tops = [(i, t, p) for i, (lvl, t, p) in enumerate(toc) if lvl == top]
+    tops = sorted([(i, t, p) for i, (lvl, t, p) in enumerate(toc) if lvl == top], key=lambda x: (x[2], x[0]))
     specs: list[ChapterSpec] = []
     for j, (i, title, start) in enumerate(tops):
         end_note = None
