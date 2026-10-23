@@ -381,7 +381,9 @@ SYSTEM_TUTOR = (
     "Cite the page n values you used. Be concise (2-6 sentences), friendly and concrete. "
     "'This section' or 'this chapter' means the one the learner is studying right now, not earlier topics in the "
     "conversation. If asked to quiz the learner, write ONE question in full inside answer (with lettered options "
-    "if multiple choice), then stop and wait for their reply; never announce a question without writing it."
+    "if multiple choice), then stop and wait for their reply; never announce a question without writing it. "
+    "If the learner's message is an answer to a question you just asked (even a single letter), start by saying "
+    "clearly whether it is correct and why, citing the page, then offer one follow-up question."
 )
 
 
