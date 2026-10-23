@@ -1,0 +1,37 @@
+# Design source and research stay private
+*.html
+*.pdf
+!frontend/**/*.html
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*accessKeys*.csv
+.aws/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Infra
+infra/*.local.*
+.terraform/
+*.tfstate*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
