@@ -412,10 +412,14 @@ def verify_mcqs(questions: list[dict], text: str) -> tuple[list[dict], llm.Usage
     return out, usage
 
 
-REVIEW_MATTER = re.compile(
-    r"^\s*(key terms?|key equations?|summary|chapter (summary|review)|review questions|conceptual questions|"
-    r"(additional |challenge )?problems|exercises|critical thinking( questions)?|self-check questions|glossary|"
-    r"references|further reading|bibliography)\b", re.I)
+_REVIEW_TERM = (r"(key (terms?|equations?|concepts|points|takeaways)|summary|review( questions| exercises)?|"
+                r"conceptual questions|(additional |challenge |practice |end[- ]of[- ]chapter )?(problems|exercises)|"
+                r"critical thinking( questions)?|self[- ]check( questions)?|questions for (review|discussion)|"
+                r"test (prep|yourself)( for [\w ]{2,20})?|glossary|references|further reading|suggested reading|"
+                r"bibliography|notes)")
+# The whole heading must be review terms ("Key Concepts and Summary", "Chapter 3 Review"), so a real section
+# such as "Summary Statistics in Economics" is still taught.
+REVIEW_MATTER = re.compile(rf"^\s*(chapter(\s+\w+)?\s+)?{_REVIEW_TERM}(\s*(,|and|&)\s*{_REVIEW_TERM})*\s*:?\s*$", re.I)
 
 
 MAX_LESSONS = 8

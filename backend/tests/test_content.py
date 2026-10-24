@@ -54,3 +54,12 @@ def test_many_subsections_cap_the_number_of_lessons():
     secs = sections_from_hints(chapter(1, 40, many), [])
     assert 2 <= len(secs) <= 8
     assert all(f"Part {i}" in " ".join(s["title"] for s in secs) for i in range(12))
+
+
+def test_review_headings_fold_in_but_real_sections_stay():
+    from app.content import REVIEW_MATTER
+    for t in ["Key Concepts and Summary", "Self-Check Questions", "Chapter Review", "Test Prep for AP Courses",
+              "Key Terms, Key Equations and Summary"]:
+        assert REVIEW_MATTER.match(t), t
+    for t in ["Summary Statistics in Economics", "Problem Solving in Physics", "Notes on Potency"]:
+        assert not REVIEW_MATTER.match(t), t
