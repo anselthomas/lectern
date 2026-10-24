@@ -225,8 +225,11 @@ def outline_usable(specs: list[ChapterSpec], page_count: int) -> bool:
     learn = [c for c in specs if c.kind in ("chapter", "appendix")]
     if len(learn) < 2:
         return False
-    if max(c.pdf_end - c.pdf_start + 1 for c in learn) > 0.6 * page_count:
+    sizes = sorted(c.pdf_end - c.pdf_start + 1 for c in learn)
+    if sizes[-1] > 0.6 * page_count:
         return False
+    if len(learn) > 12 and sizes[len(sizes) // 2] < 2:
+        return False  # a bookmark per slide or page: too fine to be chapters
     titles = [c.title.lower() for c in learn]
     return len(set(titles)) >= 0.7 * len(titles)
 
@@ -260,17 +263,24 @@ def chapters_from_bookmark_positions(doc: fitz.Document, texts: list[str]) -> li
 CHAPTER_HEAD = re.compile(r"^\s*(chapter|unit|lesson|part)\s*[-:.]?\s*(\d+|[ivxlc]+)\b[\s:.\-]*(.*)$", re.I)
 
 
+TOC_LINE = re.compile(r"(\.{3,}|\s{2,}|\t)\s*\d{1,4}\s*$")
+
+
 def chapters_from_headings(texts: list[str]) -> list[ChapterSpec]:
-    """Pages whose first lines start with 'Chapter N' (or Unit/Lesson/Part)."""
+    """Pages with a 'Chapter N' (or Unit/Lesson/Part) heading: near the top, or anywhere on the page for documents
+    whose chapters start mid-page (converted Word/RTF/text files). Contents pages, which list several chapters
+    or end lines with page numbers, are skipped."""
     found = []
     for i, text in enumerate(texts):
-        lines = [l.strip() for l in text.splitlines() if l.strip()][:3]
-        for k, line in enumerate(lines):
-            m = CHAPTER_HEAD.match(line)
-            if m:
-                rest = m.group(3).strip() or (lines[k + 1] if k + 1 < len(lines) else "")
-                found.append((i + 1, f"{m.group(1).title()} {m.group(2)}{': ' + rest if rest else ''}"[:200]))
-                break
+        all_lines = [l.strip() for l in text.splitlines() if l.strip()]
+        heads = [(k, CHAPTER_HEAD.match(l)) for k, l in enumerate(all_lines)
+                 if len(l) <= 90 and not TOC_LINE.search(l) and CHAPTER_HEAD.match(l)]
+        if len(heads) >= 3:
+            continue  # a contents page
+        top = [(k, m) for k, m in heads if k < 3]
+        for k, m in (top or heads)[:1]:
+            rest = m.group(3).strip() or (all_lines[k + 1] if k + 1 < len(all_lines) and len(all_lines[k + 1]) <= 90 else "")
+            found.append((i + 1, f"{m.group(1).title()} {m.group(2)}{': ' + rest if rest else ''}"[:200]))
     # Ignore repeats (running headers) by keeping the first page for each title.
     seen, starts = set(), []
     for p, t in found:

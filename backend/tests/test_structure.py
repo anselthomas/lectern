@@ -199,3 +199,22 @@ def test_machine_made_file_names_are_not_titles():
         assert title_from_filename(name + ".pdf") == "Untitled book", name
     for name in ["Think Python 2e", "Principles of Economics 3e", "Document Design Basics", "Scanning Electron Microscopy"]:
         assert not junk_title(name), name
+
+
+def test_mid_page_chapter_headings_are_found_but_contents_pages_skipped():
+    from app.pdf import chapters_from_headings
+    filler = "Receptors convert stimulus energy into signals. " * 20
+    texts = ["Contents\nChapter 1: Receptors .... 3\nChapter 2: Adaptation .... 9\nChapter 3: Clinics .... 15",
+             f"Preface\n{filler}", f"{filler}\nChapter 1: Receptors\n{filler}", filler, filler,
+             f"{filler}\nChapter 2: Adaptation\n{filler}", filler, f"Chapter 3: Clinics\n{filler}", filler]
+    specs = chapters_from_headings(texts)
+    assert [(s.title, s.pdf_start, s.pdf_end) for s in specs] == [
+        ("Chapter 1: Receptors", 3, 5), ("Chapter 2: Adaptation", 6, 7), ("Chapter 3: Clinics", 8, 9)]
+
+
+def test_a_bookmark_per_slide_is_not_a_chapter_outline():
+    from app.pdf import ChapterSpec, outline_usable
+    per_slide = [ChapterSpec(title=f"Slide {i}", pdf_start=i, pdf_end=i) for i in range(1, 49)]
+    assert not outline_usable(per_slide, 48)
+    chapters = [ChapterSpec(title=f"Chapter {i}", pdf_start=1 + 10 * (i - 1), pdf_end=10 * i) for i in range(1, 15)]
+    assert outline_usable(chapters, 140)
