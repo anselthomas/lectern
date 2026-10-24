@@ -74,7 +74,7 @@ export function uploadToS3(url: string, file: File, onProgress: (p: number) => v
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
-    xhr.setRequestHeader("Content-Type", "application/pdf");
+    xhr.setRequestHeader("Content-Type", "application/octet-stream"); // must match the presigned URL; the server checks the bytes
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
     xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status})`)));
     xhr.onerror = () => reject(new Error("Upload failed. Check your connection and try again."));

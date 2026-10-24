@@ -4,6 +4,11 @@ import { api, ApiError, reportUploadProblem, showLimit, uploadToS3 } from "../ap
 import { chName, Cover, ErrorBox, Loading, Spinner } from "../components";
 import { useApi, useMe } from "../state";
 
+// What the file picker offers (kept in step with backend/app/formats.py ACCEPT). The server decides from the bytes.
+const ACCEPT = "application/pdf,.pdf,.docx,.doc,.docm,.dotx,.odt,.ott,.rtf,.wpd,.pptx,.ppt,.ppsx,.odp,.xlsx,.xls,.ods,.csv,"
+  + ".pages,.key,.numbers,.html,.htm,.xhtml,.epub,.mobi,.azw,.azw3,.fb2,.xps,.oxps,.cbz,.svg,.txt,.text,.md,.markdown,.rst,"
+  + ".jpg,.jpeg,.png,.gif,.bmp,.tif,.tiff,.webp,image/*,text/plain";
+
 export function UploadBox({ onDone }: { onDone: (book: any) => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
@@ -12,11 +17,10 @@ export function UploadBox({ onDone }: { onDone: (book: any) => void }) {
   const [err, setErr] = useState<any>(null);
   const start = async (f: File) => {
     setErr(null);
-    // Phones often hand over files named "1000034521" with no type, so look at the bytes: every PDF starts with %PDF.
-    const head = await f.slice(0, 1024).text().catch(() => "");
-    if (!head.includes("%PDF")) {
-      const reason = f.size === 0 ? "That file is empty. Try saving it to your phone first, then choose it again." : "That isn't a PDF. Choose a .pdf file.";
-      setErr(new Error(reason));
+    // Any document type is welcome (PDF, Word, PowerPoint, EPUB, text, images...). The server checks what the
+    // file really is from its bytes, since phones often send names like "1000034521" with no type.
+    if (f.size === 0) {
+      setErr(new Error("That file is empty. Try saving it to your phone first, then choose it again."));
       reportUploadProblem("not_pdf", { name: f.name.slice(-60), type: f.type, size: f.size });
       return;
     }
@@ -40,20 +44,20 @@ export function UploadBox({ onDone }: { onDone: (book: any) => void }) {
   return (
     <div className="stack gap-12">
       {err && <ErrorBox error={err} />}
-      <div className={`dropzone${over ? " over" : ""}`} role="button" tabIndex={0} aria-label="Upload a PDF"
+      <div className={`dropzone${over ? " over" : ""}`} role="button" tabIndex={0} aria-label="Upload a document"
         onClick={() => progress === null && input.current?.click()} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && input.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}>
-        <input ref={input} type="file" accept="application/pdf,.pdf" hidden data-testid="pdf-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) start(f); }} />
+        <input ref={input} type="file" accept={ACCEPT} hidden data-testid="pdf-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) start(f); }} />
         {progress === null ? (
           <div className="stack gap-8" style={{ alignItems: "center" }}>
-            <strong style={{ fontSize: 17 }}>Drop a PDF here or <span style={{ color: "var(--accent)" }}>browse your files</span></strong>
-            <span className="small muted">Textbooks, manuals and long reports. We never send the whole book to a model at once.</span>
+            <strong style={{ fontSize: 17 }}>Drop a document here or <span style={{ color: "var(--accent)" }}>browse your files</span></strong>
+            <span className="small muted">PDF, Word, PowerPoint, EPUB, Kindle, text, Markdown or a photo of a page. We never send the whole book to a model at once.</span>
           </div>
         ) : (
           <div className="stack gap-12" style={{ alignItems: "stretch", maxWidth: 420, margin: "0 auto" }}>
             <div className="row between gap-12"><strong className="grow" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file?.name}</strong><span className="mono">{file ? `${(file.size / 1048576).toFixed(1)} MB` : ""}</span></div>
             <div className="bar"><span style={{ width: `${Math.round(progress * 100)}%` }} /></div>
-            <span className="small muted">{progress < 1 ? `Uploading… ${Math.round(progress * 100)}%` : "Upload complete. Starting to read the PDF…"}</span>
+            <span className="small muted">{progress < 1 ? `Uploading… ${Math.round(progress * 100)}%` : "Upload complete. Starting to read it…"}</span>
           </div>
         )}
       </div>
@@ -62,7 +66,7 @@ export function UploadBox({ onDone }: { onDone: (book: any) => void }) {
 }
 
 const statusLabel: Record<string, [string, string]> = {
-  uploading: ["Uploading", "badge-muted"], queued: ["Queued", "badge-muted"], processing: ["Reading PDF", "badge-accent"],
+  uploading: ["Uploading", "badge-muted"], queued: ["Queued", "badge-muted"], processing: ["Reading", "badge-accent"],
   needs_password: ["Needs password", "badge-warn"], no_structure: ["Needs chapters", "badge-warn"], review: ["Check chapters", "badge-warn"],
   ready: ["Ready", "badge-ok"], failed: ["Couldn't read", "badge-bad"],
 };
@@ -81,7 +85,7 @@ export default function Library() {
       <div className="row between wrap gap-16">
         <div className="stack gap-4"><h1>Your library</h1>
           <span className="muted">{usage?.plan?.name} plan · {books?.length ?? 0}{usage?.books?.limit != null ? ` of ${usage.books.limit}` : ""} book{(books?.length ?? 0) === 1 ? "" : "s"}{usage?.limits_exempt ? " · internal test account, no limits" : ""}</span></div>
-        <button className="btn btn-primary" onClick={() => (atLimit ? showLimit("You've used your free book") : setAdding(!adding))}>Upload PDF</button>
+        <button className="btn btn-primary" onClick={() => (atLimit ? showLimit("You've used your free book") : setAdding(!adding))}>Upload a book</button>
       </div>
       {error && <ErrorBox error={error} retry={() => reload()} />}
       {due?.cards?.length > 0 && (

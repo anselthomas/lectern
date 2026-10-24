@@ -34,14 +34,14 @@ def reset_user(email: str) -> None:
 
     from . import vectors
     from .models import Book, Card, ChatMessage, Chunk, Notification, Note, Review, StudyDay, UsageMonthly
-    from .storage import delete_object, drop_local
+    from .storage import delete_book_files, drop_local
 
     with SessionLocal() as db:
         user = db.query(User).filter_by(email=email).one()
         for book in db.query(Book).filter_by(user_id=user.id):
             n = db.query(func.count(Chunk.id)).filter(Chunk.book_id == book.id).scalar()
             vectors.delete_book(str(book.id), n)
-            delete_object(book.s3_key)
+            delete_book_files(book)
             drop_local(book.id)
             db.delete(book)
         for model in (Review, Card, ChatMessage, Note, Notification, StudyDay, UsageMonthly):

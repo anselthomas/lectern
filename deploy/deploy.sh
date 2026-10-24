@@ -31,6 +31,7 @@ systemctl disable --now lectern-placeholder 2>/dev/null || true
 cd "$SRC/deploy"
 docker compose up -d --build --remove-orphans
 docker image prune -f >/dev/null
+docker builder prune -f --filter until=72h >/dev/null  # keep build cache from growing on the 20 GB root disk
 for i in $(seq 1 30); do
   if curl -fs -H "X-Origin-Verify: $ORIGIN" http://localhost/api/health >/dev/null; then echo "api healthy"; exit 0; fi
   sleep 2

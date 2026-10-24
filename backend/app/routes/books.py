@@ -9,14 +9,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .. import jobs, pdf, telemetry, vectors
+from .. import formats, jobs, pdf, telemetry, vectors
 from ..auth import current_user
 from ..aws import s3
 from ..config import settings
 from ..db import get_db
 from ..limits import check_new_book, usage_row
 from ..models import Book, Chapter, Chunk, Note, Page, Progress, Section, User
-from ..storage import delete_object, drop_local, local_pdf, presign_put
+from ..storage import delete_book_files, delete_object, drop_local, local_pdf, presign_put
 from .common import chapter_label, chapter_label_n, label_for, own_book, parse_id
 
 router = APIRouter(prefix="/api")
@@ -86,14 +86,14 @@ class NewBook(BaseModel):
 
 @router.post("/books")
 def create_book(body: NewBook, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    # Phones often pass files with no extension ("1000034521"); whether it is a PDF is checked on the bytes
-    # once uploaded (see mark_uploaded), not on the name.
+    # Any document format is accepted (see formats.py); what it really is gets checked on the bytes once
+    # uploaded (see mark_uploaded), not on the name: phones often send names like "1000034521".
     check_new_book(db, user, body.size)
     title = pdf.title_from_filename(body.filename)
     book = Book(user_id=user.id, title=title[:300], filename=body.filename[:300], s3_key="", bytes=body.size)
     db.add(book)
     db.flush()
-    book.s3_key = f"users/{user.id}/books/{book.id}/source.pdf"
+    book.s3_key = f"users/{user.id}/books/{book.id}/original"
     usage_row(db, user).books_added += 1
     db.commit()
     telemetry.event("book_uploaded", user_id=user.id, book_id=book.id, bytes=body.size, filename=body.filename[:120])
@@ -109,14 +109,17 @@ def mark_uploaded(book_id: str, user: User = Depends(current_user), db: Session 
         head = s3().head_object(Bucket=settings.uploads_bucket, Key=book.s3_key)
     except Exception as e:
         raise HTTPException(400, {"code": "upload_missing", "message": "We didn't receive the file. Try again."}) from e
-    first = s3().get_object(Bucket=settings.uploads_bucket, Key=book.s3_key, Range="bytes=0-1023")["Body"].read()
-    if b"%PDF" not in first:
+    first = s3().get_object(Bucket=settings.uploads_bucket, Key=book.s3_key, Range="bytes=0-8191")["Body"].read()
+    fmt = formats.sniff(first, book.filename)
+    if fmt is None:
         delete_object(book.s3_key)
         db.delete(book)
         db.commit()
-        raise HTTPException(400, {"code": "not_pdf", "message": "That file isn't a PDF. Choose a .pdf file."})
+        raise HTTPException(400, {"code": "unsupported_format", "message":
+                                  "We can't read this kind of file. Upload a PDF, Word, PowerPoint, EPUB, text or image file."})
+    book.source_format = fmt
     book.bytes = head["ContentLength"]
-    book.status, book.status_detail = "queued", "Waiting to read the PDF"
+    book.status, book.status_detail = "queued", "Waiting to read the document" if fmt != "pdf" else "Waiting to read the PDF"
     jobs.enqueue(db, "ingest_book", book_id=book.id)
     db.commit()
     return book_summary(db, user, book)
@@ -255,10 +258,7 @@ def delete_book(book_id: str, user: User = Depends(current_user), db: Session = 
         vectors.delete_book(str(book.id), chunks)
     except Exception:
         pass  # orphaned vectors are filtered out by book_id and harmless
-    try:
-        delete_object(book.s3_key)
-    except Exception:
-        pass
+    delete_book_files(book)
     drop_local(book.id)
     db.delete(book)
     db.commit()

@@ -71,6 +71,7 @@ class Book(Base):
     bytes: Mapped[int] = mapped_column(BigInteger, default=0)
     pages: Mapped[int] = mapped_column(Integer, default=0)
     kind: Mapped[str | None] = mapped_column(String(10))  # text | scanned
+    source_format: Mapped[str | None] = mapped_column(String(12))  # what was uploaded: pdf, docx, epub, txt, ...
     # uploading | queued | processing | needs_password | no_structure | review | ready | failed
     status: Mapped[str] = mapped_column(String(20), default="uploading")
     status_detail: Mapped[str | None] = mapped_column(Text)

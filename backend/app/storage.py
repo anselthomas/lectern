@@ -28,10 +28,20 @@ def drop_local(book_id) -> None:
         pass
 
 
-def presign_put(key: str, content_type: str = "application/pdf", expires: int = 900) -> str:
+def presign_put(key: str, content_type: str = "application/octet-stream", expires: int = 900) -> str:
     return s3().generate_presigned_url("put_object", ExpiresIn=expires,
                                        Params={"Bucket": settings.uploads_bucket, "Key": key, "ContentType": content_type})
 
 
 def delete_object(key: str) -> None:
     s3().delete_object(Bucket=settings.uploads_bucket, Key=key)
+
+
+def delete_book_files(book: Book) -> None:
+    """The uploaded original and, for converted documents, the PDF made from it."""
+    prefix = book.s3_key.rsplit("/", 1)[0]
+    for key in {book.s3_key, f"{prefix}/original", f"{prefix}/source.pdf"}:
+        try:
+            delete_object(key)
+        except Exception:  # noqa: BLE001 - a missing object is fine
+            pass

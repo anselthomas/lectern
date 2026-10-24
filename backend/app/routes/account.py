@@ -18,7 +18,7 @@ from ..limits import usage_summary
 from ..models import (
     Attempt, Book, Card, Chapter, ChatMessage, Chunk, Note, Notification, Progress, Quiz, Review, StudyDay, User,
 )
-from ..storage import delete_object, drop_local
+from ..storage import delete_book_files, drop_local
 from .common import chapter_label, label_for, own_book
 
 router = APIRouter(prefix="/api")
@@ -74,7 +74,7 @@ def delete_me(user: User = Depends(current_user), db: Session = Depends(get_db))
         n = db.query(func.count(Chunk.id)).filter(Chunk.book_id == book.id).scalar()
         try:
             vectors.delete_book(str(book.id), n)
-            delete_object(book.s3_key)
+            delete_book_files(book)
         except Exception:
             pass
         drop_local(book.id)

@@ -1,6 +1,7 @@
 """Background worker: PDF ingest, embeddings, chapter builds. Run with `python -m app.worker`."""
 import concurrent.futures as cf
 import logging
+import os
 import re
 import signal
 import threading
@@ -11,11 +12,13 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, insert, text
 from sqlalchemy.exc import IntegrityError
 
-from . import content, jobs, llm, migrations, ocr, pdf, structure, telemetry, vectors
+from . import content, formats, jobs, llm, migrations, ocr, pdf, structure, telemetry, vectors
+from .aws import s3
+from .config import settings
 from .db import SessionLocal, engine
 from .limits import record_tokens
 from .models import Base, Book, Chapter, Chunk, Lesson, Notification, Page, Section, User
-from .storage import local_pdf
+from .storage import drop_local, local_pdf
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("lectern.worker")
@@ -40,14 +43,50 @@ def book_exists(db, book_id) -> bool:
     return db.get(Book, book_id) is not None
 
 
+def ensure_pdf(db, book: Book) -> None:
+    """Uploads other than PDF (Word, EPUB, text, images, ...) are converted once; the PDF is stored next to the
+    original and becomes the book's file, so everything after this reads a PDF."""
+    if not book.s3_key.endswith("/original"):
+        return  # already a PDF from an earlier run
+    import shutil
+    import tempfile
+
+    work = tempfile.mkdtemp(dir=settings.cache_dir)
+    try:
+        src = os.path.join(work, "original")
+        s3().download_file(settings.uploads_bucket, book.s3_key, src)
+        started = time.monotonic()
+        out, kind = formats.to_pdf(src, book.filename, work)
+        book.source_format = kind
+        if kind != "pdf":
+            book.status_detail = f"Converted from {formats.NAMES.get(kind, kind)}"
+            key = book.s3_key.rsplit("/", 1)[0] + "/source.pdf"
+            s3().upload_file(out, settings.uploads_bucket, key, ExtraArgs={"ContentType": "application/pdf"})
+            book.s3_key = key
+            drop_local(book.id)
+            telemetry.event("document_converted", user_id=book.user_id, book_id=book.id, format=kind,
+                            seconds=round(time.monotonic() - started, 1), pdf_bytes=os.path.getsize(out))
+        db.commit()
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
 def ingest_book(book_id: str) -> None:
     with SessionLocal() as db:
         book = db.get(Book, book_id)
         if book is None:
             return  # deleted before we got to it
         user = db.get(User, book.user_id)
-        book.status, book.status_detail = "processing", "Reading the PDF"
+        book.status, book.status_detail = "processing", "Reading the document"
         db.commit()
+        try:
+            ensure_pdf(db, book)
+        except formats.ConversionError as e:
+            book.status, book.status_detail = "failed", str(e)
+            db.commit()
+            telemetry.event("conversion_failed", user_id=book.user_id, book_id=book.id,
+                            format=book.source_format, reason=str(e)[:200])
+            return
         path = local_pdf(book)
         try:
             doc = pdf.open_pdf(path)

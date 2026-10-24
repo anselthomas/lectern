@@ -2,9 +2,13 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 # Tesseract is the OCR fallback when Textract fails (PyMuPDF calls it); wamerican-large is the word list used to
-# repair words split across lines.
+# repair words split across lines. LibreOffice (headless) converts Word, PowerPoint, OpenDocument, RTF, iWork and
+# HTML uploads to PDF; the fonts are metric-compatible stand-ins for Calibri, Cambria, Arial and Times, plus Noto
+# for other scripts, so converted pages keep their layout.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng wamerican-large \
+       libreoffice-writer-nogui libreoffice-impress-nogui libreoffice-calc-nogui \
+       fonts-liberation2 fonts-crosextra-carlito fonts-crosextra-caladea fonts-dejavu-core fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 

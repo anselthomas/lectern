@@ -22,7 +22,7 @@ const loop = [
   ["08", "Final test", "A cumulative test weighted to your weak spots."],
 ];
 const faqs = [
-  ["What kinds of PDFs work?", "Textbooks, manuals and long reports. Text PDFs work on every plan; scanned PDFs (photos of pages) need Pro because we run OCR on them."],
+  ["What can I upload?", "PDF, Word (.docx, .doc), PowerPoint, OpenDocument, RTF, EPUB and Kindle e-books, plain text, Markdown, web pages and photos of pages. Everything is converted to PDF so citations point to real pages. Scanned books (photos of every page) need Pro because we run OCR on them; a few scanned pages inside a normal book are read on every plan."],
   ["Does my book get sent to an AI all at once?", "No. Lectern reads one chapter or section at a time, and the tutor only sees the few passages that match your question."],
   ["How are page citations checked?", "Every citation must point to a page we actually sent to the model; anything else is dropped. You can open the page and report a wrong citation."],
   ["Who can see my books?", "Only you. Files are stored privately and encrypted, and every request is checked against your account."],
@@ -53,7 +53,7 @@ export default function Landing() {
           <div className="stack gap-24">
             <span className="eyebrow">For textbooks, manuals and long PDFs</span>
             <h1>Turn any book into a course you actually finish.</h1>
-            <p className="reading" style={{ fontSize: 20 }}>Upload a PDF. Lectern finds the chapters, teaches them one at a time in plain words, checks what you kept, and brings back what you missed — every answer cited to the page.</p>
+            <p className="reading" style={{ fontSize: 20 }}>Upload a book (PDF, Word, EPUB and more). Lectern finds the chapters, teaches them one at a time in plain words, checks what you kept, and brings back what you missed — every answer cited to the page.</p>
             <div className="row gap-12 wrap">
               <Link className="btn btn-primary" to={start}>Upload your first book</Link>
               <a className="btn btn-secondary" href="#how">See how it works</a>
@@ -117,7 +117,7 @@ export default function Landing() {
       <section style={{ background: "var(--ink)", color: "#fff" }}>
         <div className="page row between wrap gap-24">
           <h2 style={{ color: "#fff" }}>That book on your shelf? Start chapter one tonight.</h2>
-          <Link className="btn btn-primary" to={start}>Upload a PDF</Link>
+          <Link className="btn btn-primary" to={start}>Upload a book</Link>
         </div>
       </section>
       <footer className="page row between wrap gap-16 small muted">
