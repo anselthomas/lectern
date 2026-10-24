@@ -144,6 +144,12 @@ p { margin: 0; }
 .bar > span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
 .bar.ok > span { background: var(--ok); }
 .steps { display: flex; gap: 4px; }
+/* Final-test question navigator: jump to any question; answered ones fill in, flagged ones get a star. */
+.qnav { display: flex; flex-wrap: wrap; gap: 6px; }
+.qnav button { position: relative; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line-2); background: #fff; font: 600 13px var(--mono); color: var(--muted); cursor: pointer; }
+.qnav button.answered { background: var(--accent-soft); border-color: var(--accent-soft-2); color: var(--ink); }
+.qnav button.cur { border: 2px solid var(--accent); color: var(--ink); }
+.qnav button.flagged::after { content: "°5"; position: absolute; top: -7px; right: -5px; font-size: 12px; color: var(--warn-strong); }
 .steps span { flex: 1; height: 6px; border-radius: 3px; background: var(--line-2); }
 .steps span.done { background: var(--ok); }
 .steps span.cur { background: var(--accent); }

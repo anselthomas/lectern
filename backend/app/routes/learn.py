@@ -275,7 +275,10 @@ def submit_quiz(quiz_id: str, body: Submit, user: User = Depends(current_user), 
     for q, (r, u) in zip(quiz.questions, graded):
         usage.add(u)
         results.append({"id": q["id"], "correct": r["correct"], "feedback": r["feedback"],
-                        "section_n": q.get("section_n"), "chapter_n": q.get("chapter_n"), "page": q.get("page")})
+                        "correct_answer": q["options"][q["answer_index"]] if q["type"] == "mcq" else q.get("model_answer"),
+                        "explanation": q.get("explanation"),
+                        "section_n": q.get("section_n"), "chapter_n": q.get("chapter_n"), "page": q.get("page"),
+                        "page_label": label_for(db, book.id, q.get("page")) if q.get("page") else None})
     score = sum(r["correct"] for r in results) / max(1, len(results))
     db.add(Attempt(user_id=user.id, quiz_id=quiz.id, answers=[body.answers], results=results, score=score))
     record_tokens(db, user, usage.tokens_in, usage.tokens_out)

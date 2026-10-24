@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, showLimit } from "../api";
-import { ErrorBox, Loading, Spinner } from "../components";
+import { ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
 import { useApi } from "../state";
 import { QuizRunner } from "./Quiz";
 
@@ -10,6 +10,8 @@ export default function FinalTest() {
   const { data: book } = useApi<any>(`/books/${bookId}`);
   const { data: status, error } = useApi<any>(`/books/${bookId}/final`);
   const [quiz, setQuiz] = useState<any>(null);
+  const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [viewer, setViewer] = useState<number | null>(null);
   const [done, setDone] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<any>(null);
@@ -30,17 +32,34 @@ export default function FinalTest() {
       <div className="card stack gap-12"><span className="label">Score by chapter</span>
         {done.by_chapter.map((g: any) => <div key={g.chapter_n} className="row between" style={{ padding: "8px 0", borderBottom: "1px solid var(--bg-3)" }}><span>Ch. {g.chapter_n} · {g.title}</span><span className="mono">{Math.round((g.correct / g.total) * 100)}%</span></div>)}
       </div>
+      <div className="card stack gap-16"><span className="label">Your answers</span>
+        {quiz.questions.map((q: any, k: number) => {
+          const r = done.results.find((x: any) => x.id === q.id);
+          const mine = answers[q.id];
+          const given = q.type === "mcq" ? (typeof mine === "number" ? q.options[mine] : null) : mine;
+          return (
+            <div key={q.id} className="stack gap-8" style={{ paddingBottom: 14, borderBottom: "1px solid var(--bg-3)" }}>
+              <div className="row gap-8 wrap"><span className={`badge ${r?.correct ? "badge-ok" : "badge-warn"}`}>{r?.correct ? "Correct" : given ? "Missed" : "Not answered"}</span><span className="small muted">Q{k + 1} · Ch. {q.chapter_n}</span></div>
+              <strong>{q.question}</strong>
+              {given && <span className="small"><span className="muted">You said:</span> {given}</span>}
+              {!r?.correct && r?.correct_answer && <span className="small"><span className="muted">Answer:</span> {r.correct_answer}</span>}
+              {!r?.correct && (r?.explanation || r?.feedback) && <span className="small muted">{r.explanation || r.feedback}</span>}
+              <PageChip page={r?.page} label={r?.page_label} onOpen={setViewer} />
+            </div>);
+        })}
+      </div>
       <div className="row gap-12 wrap">
         {done.passed && <button className="btn btn-secondary" onClick={() => window.print()}>Download certificate</button>}
         <Link className="btn btn-strong" to="/library">Start another book</Link>
         {!done.passed && <Link className="btn btn-secondary" to={`/review?book=${bookId}`}>Review weak cards</Link>}
       </div>
+      {viewer && <SourceViewer bookId={bookId!} page={viewer} onClose={() => setViewer(null)} />}
     </div>
   );
   if (quiz) return (
     <div className="page-narrow">
       <QuizRunner quiz={quiz} bookId={bookId!} timed={quiz.minutes} header={<span className="small muted">{book.title} · Final test</span>}
-        onSubmit={async (answers) => setDone(await api(`/quizzes/${quiz.id}/submit`, { body: { answers } }))} />
+        onSubmit={async (a) => { setAnswers(a); setDone(await api(`/quizzes/${quiz.id}/submit`, { body: { answers: a } })); }} />
     </div>
   );
   return (

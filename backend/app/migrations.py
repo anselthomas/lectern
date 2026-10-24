@@ -18,6 +18,8 @@ STATEMENTS = [
     # 2026-10-24: rebuilds used to stack "Chapter N is ready" notifications; keep only the newest of each.
     "DELETE FROM notifications a USING notifications b WHERE a.user_id = b.user_id AND a.type = b.type "
     "AND a.link = b.link AND a.created_at < b.created_at",
+    "DELETE FROM notifications WHERE type = 'chapter_ready' AND NOT EXISTS "
+    "(SELECT 1 FROM chapters c WHERE notifications.link LIKE '%chapter=' || c.id::text)",
 ]
 
 

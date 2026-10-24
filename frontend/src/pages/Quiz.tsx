@@ -30,13 +30,26 @@ export function QuizRunner({ quiz, bookId, onSubmit, timed, header }: { quiz: an
     try { await onSubmit(answers); } catch (e) { setErr(e); setBusy(false); }
   };
   const instant = !timed; // the final test doesn't reveal answers until the end
+  const answered = (id: string) => answers[id] !== undefined && answers[id] !== null && answers[id] !== "";
+  const unanswered = quiz.questions.filter((x: any) => !answered(x.id)).length;
+  const flagged = quiz.questions.filter((x: any) => flags.has(x.id)).length;
+  // When time runs out the test is handed in as it stands.
+  useEffect(() => {
+    if (timed && left === 0 && !busy) { setBusy(true); onSubmit(answers).catch((e) => { setErr(e); setBusy(false); }); }
+  }, [left]);
   return (
     <div className="stack gap-24">
       <div className="row between wrap gap-12">
         {header}
         <span className="mono muted">{i + 1} / {quiz.questions.length}{timed ? ` · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : ""}</span>
       </div>
-      <div className="steps">{quiz.questions.map((x: any, k: number) => <span key={x.id} className={k < i ? "done" : k === i ? "cur" : ""} />)}</div>
+      {timed ? (
+        <nav className="qnav" aria-label="Questions">{quiz.questions.map((x: any, k: number) => (
+          <button key={x.id} className={`${answered(x.id) ? "answered" : ""}${k === i ? " cur" : ""}${flags.has(x.id) ? " flagged" : ""}`} aria-current={k === i ? "step" : undefined}
+            aria-label={`Question ${k + 1}${answered(x.id) ? ", answered" : ", not answered"}${flags.has(x.id) ? ", flagged" : ""}`} onClick={() => setI(k)}>{k + 1}</button>))}
+        </nav>
+      ) : <div className="steps">{quiz.questions.map((x: any, k: number) => <span key={x.id} className={k < i ? "done" : k === i ? "cur" : ""} />)}</div>}
+      {timed && left > 0 && left <= 60 && <div className="alert alert-warn" role="status">Under a minute left. The test is handed in automatically at 0:00.</div>}
       {err && <ErrorBox error={err} />}
       <div className="card stack gap-16">
         <div className="row gap-8 wrap"><span className="badge badge-muted">{q.type === "mcq" ? "Multiple choice" : "Short answer"}</span>
@@ -69,6 +82,8 @@ export function QuizRunner({ quiz, bookId, onSubmit, timed, header }: { quiz: an
           </div>
         )}
       </div>
+      {timed && last && (unanswered > 0 || flagged > 0) && (
+        <div className="alert alert-warn" role="status">{[unanswered && `${unanswered} unanswered`, flagged && `${flagged} flagged`].filter(Boolean).join(" · ")}. Use the numbers above to go back before you see your results.</div>)}
       <div className="row between wrap gap-12">
         {timed ? <button className="btn btn-ghost" onClick={() => { const f = new Set(flags); f.has(q.id) ? f.delete(q.id) : f.add(q.id); setFlags(f); }}>{flags.has(q.id) ? "★ Flagged" : "☆ Flag for review"}</button>
           : <button className="btn btn-ghost" disabled={!!result || busy} onClick={() => { setAnswers({ ...answers, [q.id]: null }); next(); }}>Skip</button>}

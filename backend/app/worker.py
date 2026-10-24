@@ -126,6 +126,9 @@ def ingest_book(book_id: str) -> None:
                 db.add(Chapter(book_id=book.id, n=n, title=s.title[:300], kind=s.kind, pdf_start=s.pdf_start,
                                pdf_end=s.pdf_end, outline_children=s.children, check_note=s.check_note))
             book.status, book.status_detail = "review", None
+            # Chapters were (re)created, so "chapter ready" notices from an earlier detection point nowhere.
+            db.query(Notification).filter(Notification.user_id == book.user_id, Notification.type == "chapter_ready",
+                                          Notification.link.like(f"/books/{book.id}?%")).delete(synchronize_session=False)
             notify(db, book.user_id, "book_ready", f"{book.title}: chapters found",
                    f"We found {sum(1 for s in specs if s.kind == 'chapter')} chapters. Check them to start.",
                    f"/books/{book.id}/structure")
