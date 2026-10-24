@@ -68,6 +68,49 @@ def page_text(page: fitz.Page, ocr: bool = False) -> str:
     return page.get_text("text")
 
 
+_ENGLISH: set[str] | None = None
+
+
+def english_words() -> set[str]:
+    """The system word list (Debian's wamerican, installed in the image); empty if absent."""
+    global _ENGLISH
+    if _ENGLISH is None:
+        _ENGLISH = set()
+        for path in ("/usr/share/dict/words", "/usr/share/dict/american-english"):
+            try:
+                with open(path, encoding="utf-8", errors="ignore") as f:
+                    _ENGLISH = {w.strip().lower() for w in f if w.strip().isalpha()}
+                break
+            except OSError:
+                continue
+    return _ENGLISH
+
+
+LINE_SPLIT = re.compile(r"([A-Za-z]+)[ \t]*\n[ \t]*([a-z]+)")
+
+
+def rejoin_split_words(texts: list[str], words: set[str] | None = None) -> list[str]:
+    """Undo line wraps that cut a word in two without a hyphen ("rec\\neptor", "str\\nength"), which some
+    exporters produce. A break is joined when the halves aren't both words but the whole is one, or when
+    neither half is a word at all. Words come from an English list plus the document's own vocabulary."""
+    words = english_words() if words is None else words
+    seen = Counter(w.lower() for t in texts for w in re.findall(r"[A-Za-z]{2,}", t))
+
+    def known(w: str) -> bool:
+        w = w.lower()
+        if len(w) == 1:
+            return w in ("a", "i")
+        return w in words or seen[w] >= 2
+
+    def fix(m: re.Match) -> str:
+        a, b = m.group(1), m.group(2)
+        whole, a_ok, b_ok = a + b, known(a), known(b)
+        if (known(whole) and not (a_ok and b_ok)) or (not a_ok and not b_ok):
+            return whole
+        return m.group(0)
+    return [LINE_SPLIT.sub(fix, t) for t in texts]
+
+
 def clean(text: str) -> str:
     text = text.replace("­", "")
     text = re.sub(r"-\n(?=[a-z])", "", text)          # join hyphenated line breaks

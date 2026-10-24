@@ -18,6 +18,7 @@ PRICES = {
     "text": {"standard": (0.30, 2.50), "flex": (0.15, 1.25)},  # per 1M input / output tokens, Nova 2 Lite
     "embed_per_m": 0.02,                                        # Titan Text Embeddings V2, per 1M input tokens
     "transcribe_per_min": 0.024,                                # Amazon Transcribe batch, per audio minute
+    "textract_page": 0.0015,                                    # Textract DetectDocumentText, Sydney, first 1M pages/month
 }
 FIXED_MONTHLY_USD = 23.0  # EC2 t4g.small + EBS + public IPv4 + small S3/CloudFront (see docs/architecture-plan.md)
 

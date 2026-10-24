@@ -91,6 +91,7 @@ class Page(Base):
     pdf_page: Mapped[int] = mapped_column(Integer, primary_key=True)  # 1-based
     label: Mapped[str | None] = mapped_column(String(20))
     text: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str | None] = mapped_column(String(12))  # text | textract | tesseract | blank | failed
 
 
 class Chapter(Base):

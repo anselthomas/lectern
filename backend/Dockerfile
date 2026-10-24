@@ -1,9 +1,10 @@
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
-# Tesseract powers OCR for scanned PDFs (PyMuPDF calls it).
+# Tesseract is the OCR fallback when Textract fails (PyMuPDF calls it); wamerican is the word list used to
+# repair words split across lines.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng \
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng wamerican \
     && rm -rf /var/lib/apt/lists/*
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 

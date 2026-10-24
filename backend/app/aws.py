@@ -32,6 +32,13 @@ def s3vectors():
 
 
 @lru_cache
+def textract():
+    # Adaptive retries back off on Textract's per-second limits (ThrottlingException / ProvisionedThroughputExceeded).
+    return boto3.client("textract", region_name=settings.aws_region,
+                        config=Config(read_timeout=60, max_pool_connections=16, retries={"max_attempts": 8, "mode": "adaptive"}))
+
+
+@lru_cache
 def transcribe():
     return boto3.client("transcribe", region_name=settings.aws_region)
 

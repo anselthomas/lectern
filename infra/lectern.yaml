@@ -306,6 +306,10 @@ Resources:
                 Effect: Allow
                 Action: [transcribe:StartTranscriptionJob, transcribe:GetTranscriptionJob, transcribe:DeleteTranscriptionJob]
                 Resource: !Sub "arn:aws:transcribe:${AWS::Region}:${AWS::AccountId}:transcription-job/lectern-*"
+              - Sid: TextractOcr
+                Effect: Allow
+                Action: textract:DetectDocumentText   # page images sent as bytes; no resource-level permissions exist
+                Resource: "*"
               - Sid: CognitoAdmin
                 Effect: Allow
                 Action:

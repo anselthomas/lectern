@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, insert, text
 from sqlalchemy.exc import IntegrityError
 
-from . import content, jobs, llm, migrations, pdf, structure, telemetry, vectors
+from . import content, jobs, llm, migrations, ocr, pdf, structure, telemetry, vectors
 from .db import SessionLocal, engine
 from .limits import record_tokens
 from .models import Base, Book, Chapter, Chunk, Lesson, Notification, Page, Section, User
@@ -81,24 +81,36 @@ def ingest_book(book_id: str) -> None:
             book.title = pdf.title_from_filename(book.filename)
         db.commit()
 
-        texts, labels = [], []
+        texts, labels, sources = [], [], []
         db.execute(delete(Page).where(Page.book_id == book.id))
-        batch = []
         for i in range(doc.page_count):
-            page = doc[i]
-            if i % 50 == 0:
-                book.status_detail = f"{'Running OCR on' if scanned else 'Reading'} page {i + 1} of {doc.page_count}"
+            if i % 100 == 0:
+                book.status_detail = f"Reading page {i + 1} of {doc.page_count}"
                 db.commit()
-            t = pdf.clean(pdf.page_text(page, ocr=scanned))
-            label = page.get_label() or None
-            texts.append(t)
-            labels.append(label)
-            batch.append({"book_id": book.id, "pdf_page": i + 1, "label": label, "text": t})
-            if len(batch) >= 200:
-                db.execute(insert(Page), batch)
-                batch = []
-        if batch:
-            db.execute(insert(Page), batch)
+            page = doc[i]
+            texts.append(pdf.page_text(page))
+            labels.append(page.get_label() or None)
+            sources.append("text")
+        # Every page without a usable text layer (scanned, photographed, text drawn as an image, broken font
+        # encoding) is read with OCR, in any book, not only books that are scanned throughout.
+        need = [i + 1 for i, t in enumerate(texts) if not ocr.text_usable(t) and ocr.has_visible_content(doc[i])]
+        for i, t in enumerate(texts):
+            if not ocr.text_usable(t) and i + 1 not in need:
+                sources[i] = "blank"
+        if need:
+            def progress(done, total):
+                book.status_detail = f"Reading scanned pages with OCR ({done} of {total})"
+                db.commit()
+            with telemetry.scope(user_id=book.user_id, book_id=book.id, feature="ocr"):
+                for n, (t, src) in ocr.ocr_pages(doc, need, progress).items():
+                    if ocr.text_usable(t) or not ocr.text_usable(texts[n - 1]):
+                        texts[n - 1], sources[n - 1] = t, src
+        book.kind = "scanned" if len(need) > 0.6 * max(1, doc.page_count) else "text"
+        texts = pdf.rejoin_split_words([pdf.clean(t) for t in texts])
+        rows = [{"book_id": book.id, "pdf_page": i + 1, "label": labels[i], "text": texts[i], "source": sources[i]}
+                for i in range(doc.page_count)]
+        for i in range(0, len(rows), 200):
+            db.execute(insert(Page), rows[i:i + 200])
         if pdf.junk_title(book.title) or book.title == "Untitled book":
             # No usable title in the PDF or its file name (e.g. a phone's "Inbound4283..."): use its first heading.
             heading = next((h for h in (pdf.heading_title(t) for t in texts[:3]) if h and not pdf.junk_title(h)), None)

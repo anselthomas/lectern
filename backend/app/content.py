@@ -301,6 +301,14 @@ def generate_lesson(db: Session, book: Book, ch: Chapter, sec: Section, level: s
             continue
         q["page"] = clamp(q.get("page"), lo, hi)
         checks.append(q)
+    # Quick checks get the same examiner read as chapter quizzes: a question built from a fact plus an example
+    # can sound right and still have no single right answer.
+    try:
+        kept, u3 = verify_mcqs([{**q, "type": "mcq", "id": f"qc{i}"} for i, q in enumerate(checks)], text)
+        usage.add(u3)
+        checks = [{k: v for k, v in q.items() if k not in ("type", "id")} for q in kept]
+    except llm.LLMError as e:
+        log.warning("quick-check review for section %s skipped: %s", sec.id, e)
     data["quick_checks"] = checks
     data["labels"] = {str(k): v for k, v in labels.items()}
     return data, usage
