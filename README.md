@@ -6,7 +6,7 @@ Turn any book into a course you actually finish. Upload a PDF; Lectern finds the
 
 ## How it works
 
-1. **Upload** a textbook, manual or scanned PDF. It goes straight to S3; the book is never sent to a model all at once.
+1. **Upload** a textbook, manual or notes: PDF, Word (.docx/.doc), PowerPoint, OpenDocument, RTF, Apple Pages/Keynote, HTML, EPUB, Kindle (MOBI), FB2, XPS, plain text, Markdown or photos of pages. It goes straight to S3; the book is never sent to a model all at once. The format is recognised from the file's bytes (phones often send names like `1000034521`) and everything is converted to PDF on the server (LibreOffice headless, or PyMuPDF for e-books, XPS and images), keeping headings and e-book contents as bookmarks. Pages without a usable text layer are read with Amazon Textract (Tesseract as fallback).
 2. **Confirm the chapters.** Lectern reads the bookmarks or contents page, maps printed page numbers to PDF pages, and lets you fix anything.
 3. **Learn one chapter at a time.** Chapter 1 is built right away; later chapters are built when you reach them.
 
