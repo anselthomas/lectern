@@ -15,12 +15,17 @@ def enqueue(db: Session, type_: str, **payload) -> Job:
 
 
 def claim(db: Session) -> Job | None:
+    """Next job to run. Work a learner is waiting on (reading a new upload, building lessons) goes before
+    background embedding, and only one book embeds at a time: several large books embedding together
+    exhaust the Bedrock request quota and would hold every worker thread for many minutes."""
     row = db.execute(text(
         """
         UPDATE jobs SET status = 'running', locked_at = now(), attempts = attempts + 1
         WHERE id = (
             SELECT id FROM jobs WHERE status = 'pending' AND run_after <= now()
-            ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1
+              AND NOT (type = 'embed_book' AND EXISTS (
+                  SELECT 1 FROM jobs r WHERE r.type = 'embed_book' AND r.status = 'running'))
+            ORDER BY (type = 'embed_book'), id FOR UPDATE SKIP LOCKED LIMIT 1
         ) RETURNING id
         """
     )).first()
