@@ -216,12 +216,23 @@ export const plain = (text: string) => text.replace(/==([^=\n]+?)==/g, "$1").rep
 
 /** Renders **bold** and ==highlighter== marks inside model text without allowing HTML. */
 export function Rich({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|==[^=\n]+?==)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|==[^=\n]+?==|<su[bp]>[^<]{1,20}<\/su[bp]>)/g);
   return <>{parts.map((p, i) => {
+    // Models sometimes write <sup>/<sub> for powers and chemical formulas; those two tags alone are rendered.
+    const tag = p.match(/^<(su[bp])>([^<]*)<\/su[bp]>$/);
+    if (tag) return tag[1] === "sup" ? <sup key={i}>{tag[2]}</sup> : <sub key={i}>{tag[2]}</sub>;
     if (p.length > 4 && p.startsWith("**") && p.endsWith("**")) return <strong key={i}>{p.slice(2, -2)}</strong>;
     if (p.length > 4 && p.startsWith("==") && p.endsWith("==")) return <mark key={i} className="hl"><Rich text={p.slice(2, -2)} /></mark>;
-    return <span key={i}>{p}</span>;
+    return <span key={i}><Powers text={p} /></span>;
   })}</>;
+}
+
+/** "10^-10 m", "m/s^2", "x^{n+1}" written by the model become real superscripts. A caret with spaces
+ * around it (code such as `x ^ y`) is left alone. */
+function Powers({ text }: { text: string }) {
+  const parts = text.split(/(?<=[\w)\]])\^(\{[^}]{1,12}\}|[-−+]?\w{1,8}(?:\.\d+)?)/g);
+  if (parts.length === 1) return <>{text}</>;
+  return <>{parts.map((p, i) => i % 2 ? <sup key={i}>{p.replace(/^\{|\}$/g, "")}</sup> : p)}</>;
 }
 
 /** Multi-line model text: paragraphs, plus "- " / "• " / "1. " lines rendered as lists. */
