@@ -16,4 +16,6 @@ COPY tests ./tests
 RUN useradd --create-home --uid 10001 lectern && mkdir -p /data/cache && chown -R lectern /data
 USER lectern
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+# CloudFront reuses origin connections for up to 5 s (OriginKeepaliveTimeout); the server must keep them open longer,
+# or a request sent just as uvicorn closes an idle connection comes back as a 502.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--timeout-keep-alive", "75"]

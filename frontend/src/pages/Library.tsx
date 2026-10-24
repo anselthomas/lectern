@@ -14,12 +14,16 @@ export function UploadBox({ onDone }: { onDone: (book: any) => void }) {
     setErr(null);
     if (!f.name.toLowerCase().endsWith(".pdf") && f.type !== "application/pdf") { setErr(new Error("That isn't a PDF. Choose a .pdf file.")); return; }
     setFile(f); setProgress(0);
+    let created: string | null = null;
     try {
       const { book, upload_url } = await api("/books", { body: { filename: f.name, size: f.size } });
+      created = book.id;
       await uploadToS3(upload_url, f, setProgress);
-      const done = await api(`/books/${book.id}/uploaded`, { method: "POST" });
+      const done = await api(`/books/${book.id}/uploaded`, { method: "POST", retry: true });
       onDone(done);
     } catch (e) {
+      // Don't leave a half-made book stuck at "uploading" in the library.
+      if (created) api(`/books/${created}`, { method: "DELETE" }).catch(() => undefined);
       setProgress(null); setFile(null);
       if (!(e instanceof ApiError && e.status === 402)) setErr(e);
     }

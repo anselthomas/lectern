@@ -102,6 +102,8 @@ def create_book(body: NewBook, user: User = Depends(current_user), db: Session =
 @router.post("/books/{book_id}/uploaded")
 def mark_uploaded(book_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     book = own_book(db, user, book_id)
+    if book.status != "uploading":  # a retried request: the first one already queued the book
+        return book_summary(db, user, book)
     try:
         head = s3().head_object(Bucket=settings.uploads_bucket, Key=book.s3_key)
     except Exception as e:

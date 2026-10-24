@@ -24,17 +24,24 @@ export function showLimit(message: string, code = "limit") {
   limitListeners.forEach((fn) => fn(err));
 }
 
-export async function api<T = any>(path: string, opts: { method?: string; body?: unknown; raw?: boolean } = {}): Promise<T> {
+/** `retry`: the request is safe to repeat, so a gateway error (CloudFront 502/503/504) is retried once, as GETs are. */
+export async function api<T = any>(path: string, opts: { method?: string; body?: unknown; raw?: boolean; retry?: boolean } = {}): Promise<T> {
   const token = await idToken();
   const isForm = opts.body instanceof FormData; // files: let the browser set the multipart boundary
-  const res = await fetch(`/api${path}`, {
-    method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
+  const method = opts.method ?? (opts.body !== undefined ? "POST" : "GET");
+  const send = () => fetch(`/api${path}`, {
+    method,
     headers: {
       ...(opts.body !== undefined && !isForm ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: opts.body === undefined ? undefined : isForm ? (opts.body as FormData) : JSON.stringify(opts.body),
   });
+  let res = await send();
+  if ([502, 503, 504].includes(res.status) && (method === "GET" || opts.retry)) {
+    await new Promise((r) => setTimeout(r, 1000));
+    res = await send();
+  }
   if (opts.raw && res.ok) return res as any;
   if (!res.ok) {
     let detail: any = null;
