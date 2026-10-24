@@ -107,6 +107,45 @@ def highlight_lessons() -> None:
     print(f"highlighted {done} lessons")
 
 
+def repair_text() -> None:
+    """One-off for books read before per-page OCR and split-word repair: OCR pages that came out empty,
+    rejoin words split across lines, and re-index the book for search and the tutor when anything changed."""
+    from sqlalchemy import update
+
+    from . import jobs, ocr, pdf, telemetry
+    from .models import Book, Page
+    from .storage import local_pdf
+
+    with SessionLocal() as db:
+        for book in db.query(Book).filter(Book.status.in_(("review", "ready"))).all():
+            pages = db.query(Page).filter_by(book_id=book.id).order_by(Page.pdf_page).all()
+            texts = [p.text for p in pages]
+            sources = [p.source or "text" for p in pages]
+            empty = [p.pdf_page for p in pages if not ocr.text_usable(p.text)]
+            ocr_done = 0
+            if empty:
+                doc = pdf.open_pdf(local_pdf(book))
+                need = [n for n in empty if ocr.has_visible_content(doc[n - 1])]
+                with telemetry.scope(user_id=book.user_id, book_id=book.id, feature="ocr"):
+                    for n, (t, src) in ocr.ocr_pages(doc, need).items():
+                        if ocr.text_usable(t):
+                            texts[n - 1], sources[n - 1] = pdf.clean(t), src
+                            ocr_done += 1
+                for n in set(empty) - set(need):
+                    sources[n - 1] = "blank"
+            fixed = pdf.rejoin_split_words(texts)
+            changed = [i for i, p in enumerate(pages) if fixed[i] != p.text or sources[i] != p.source]
+            for i in changed:
+                db.execute(update(Page).where(Page.book_id == book.id, Page.pdf_page == pages[i].pdf_page)
+                           .values(text=fixed[i], source=sources[i]))
+            if any(fixed[i] != pages[i].text for i in changed):
+                book.embed_status = "pending"
+                jobs.enqueue(db, "embed_book", book_id=book.id)
+            db.commit()
+            print(f"{book.title[:40]}: {len(pages)} pages, {ocr_done} read with OCR, "
+                  f"{sum(1 for i in changed if fixed[i] != pages[i].text)} pages with text repaired")
+
+
 def verify_quizzes() -> None:
     """One-off: give chapter quizzes written before answer checking the examiner's second read."""
     from . import content, telemetry
@@ -130,7 +169,8 @@ def verify_quizzes() -> None:
 
 
 if __name__ == "__main__":
-    commands = {"backfill-usage": backfill_usage, "highlight-lessons": highlight_lessons, "verify-quizzes": verify_quizzes}
+    commands = {"backfill-usage": backfill_usage, "highlight-lessons": highlight_lessons, "verify-quizzes": verify_quizzes,
+                "repair-text": repair_text}
     if len(sys.argv) == 2 and sys.argv[1] in commands:
         commands[sys.argv[1]]()
         sys.exit(0)
