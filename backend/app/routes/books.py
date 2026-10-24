@@ -86,8 +86,8 @@ class NewBook(BaseModel):
 
 @router.post("/books")
 def create_book(body: NewBook, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    if not body.filename.lower().endswith(".pdf"):
-        raise HTTPException(400, {"code": "not_pdf", "message": "Only PDF files are supported."})
+    # Phones often pass files with no extension ("1000034521"); whether it is a PDF is checked on the bytes
+    # once uploaded (see mark_uploaded), not on the name.
     check_new_book(db, user, body.size)
     title = pdf.title_from_filename(body.filename)
     book = Book(user_id=user.id, title=title[:300], filename=body.filename[:300], s3_key="", bytes=body.size)
@@ -109,6 +109,12 @@ def mark_uploaded(book_id: str, user: User = Depends(current_user), db: Session 
         head = s3().head_object(Bucket=settings.uploads_bucket, Key=book.s3_key)
     except Exception as e:
         raise HTTPException(400, {"code": "upload_missing", "message": "We didn't receive the file. Try again."}) from e
+    first = s3().get_object(Bucket=settings.uploads_bucket, Key=book.s3_key, Range="bytes=0-1023")["Body"].read()
+    if b"%PDF" not in first:
+        delete_object(book.s3_key)
+        db.delete(book)
+        db.commit()
+        raise HTTPException(400, {"code": "not_pdf", "message": "That file isn't a PDF. Choose a .pdf file."})
     book.bytes = head["ContentLength"]
     book.status, book.status_detail = "queued", "Waiting to read the PDF"
     jobs.enqueue(db, "ingest_book", book_id=book.id)
