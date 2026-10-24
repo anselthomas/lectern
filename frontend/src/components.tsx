@@ -216,8 +216,15 @@ export const plain = (text: string) => text.replace(/==([^=\n]+?)==/g, "$1").rep
 
 /** Renders **bold** and ==highlighter== marks inside model text without allowing HTML. */
 export function Rich({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|==[^=\n]+?==|<su[bp]>[^<]{1,20}<\/su[bp]>)/g);
+  // `code` is matched along with the other marks, so whichever starts first wins: code keeps its ** and ^
+  // literally, and a highlight placed inside a code span highlights the whole span.
+  const parts = text.split(/(`[^`\n]+`|\*\*[^*]+\*\*|==[^=\n]+?==|<su[bp]>[^<]{1,20}<\/su[bp]>)/g);
   return <>{parts.map((p, i) => {
+    if (p.length > 2 && p.startsWith("`") && p.endsWith("`")) {
+      const code = p.slice(1, -1);
+      const el = <code key={i} className="inline-code">{code.replace(/==/g, "")}</code>;
+      return /^==.*==$/.test(code) ? <mark key={i} className="hl">{el}</mark> : el;
+    }
     // Models sometimes write <sup>/<sub> for powers and chemical formulas; those two tags alone are rendered.
     const tag = p.match(/^<(su[bp])>([^<]*)<\/su[bp]>$/);
     if (tag) return tag[1] === "sup" ? <sup key={i}>{tag[2]}</sup> : <sub key={i}>{tag[2]}</sub>;

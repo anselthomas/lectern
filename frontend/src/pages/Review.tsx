@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import { ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
+import { ErrorBox, Loading, Rich, PageChip, SourceViewer, Spinner } from "../components";
 import { useApi } from "../state";
 
 const ratings = [[1, "Again"], [2, "Hard"], [3, "Good"], [4, "Easy"]] as const;
@@ -46,10 +46,10 @@ export default function Review() {
       <div className="steps">{cards.map((c: any, k: number) => <span key={c.id} className={k < i ? "done" : k === i ? "cur" : ""} />)}</div>
       <div className="card flash">
         <div className="row gap-8 wrap center"><span className="small muted">{card.book.title}</span>{card.tag && <span className="badge badge-muted">{card.tag}</span>}{card.source === "missed_question" && <span className="badge badge-warn">Missed in quiz</span>}</div>
-        <p style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.35, maxWidth: 560 }}>{card.front}</p>
+        <p style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.35, maxWidth: 560 }}><Rich text={card.front} /></p>
         {shown && <>
           <hr className="divider" style={{ width: "60%" }} />
-          <div className="reading" style={{ fontSize: 17, maxWidth: 560, whiteSpace: "pre-wrap" }}>{card.back}</div>
+          <div className="reading" style={{ fontSize: 17, maxWidth: 560, whiteSpace: "pre-wrap" }}><Rich text={card.back} /></div>
           <PageChip page={card.page} label={card.page_label} onOpen={(p) => setViewer({ book: card.book.id, page: p })} />
         </>}
       </div>

@@ -15,15 +15,15 @@ function QuickCheck({ q, i, total, onOpen, compact, id }: { q: any; i: number; t
   return (
     <section className={`card stack ${compact ? "gap-12" : "gap-16"}`} style={compact ? { padding: 14 } : undefined} aria-labelledby={hid}>
       <div className="row between"><h2 id={hid} className="eyebrow" style={{ fontSize: compact ? 11 : 13 }}>{compact ? "Tutor quiz" : "Quick check"}</h2>{!compact && <span className="small muted">{i + 1} of {total}</span>}</div>
-      <p style={{ fontSize: compact ? 15 : 18, fontWeight: 700, lineHeight: 1.45 }}>{q.question}</p>
+      <p style={{ fontSize: compact ? 15 : 18, fontWeight: 700, lineHeight: 1.45 }}><Rich text={q.question} /></p>
       <div className="stack gap-8" role="radiogroup" aria-label="Answer">
         {q.options.map((o: string, k: number) => {
           const cls = checked ? (k === q.answer_index ? " correct" : k === pick ? " wrong" : "") : "";
-          return <button key={k} className={`option${cls}`} role="radio" aria-checked={pick === k} disabled={checked} onClick={() => setPick(k)}><span className="key">{"ABCD"[k]}</span>{o}</button>;
+          return <button key={k} className={`option${cls}`} role="radio" aria-checked={pick === k} disabled={checked} onClick={() => setPick(k)}><span className="key">{"ABCD"[k]}</span><span><Rich text={o} /></span></button>;
         })}
       </div>
       {!checked ? <button className="btn btn-sm btn-strong" style={{ alignSelf: "flex-start" }} disabled={pick === null} onClick={() => setChecked(true)}>Check</button>
-        : <div className={`alert ${right ? "alert-ok" : "alert-error"} stack gap-8`} role="status"><span><strong>{right ? "Correct." : "Not quite."}</strong> {q.explanation}</span><PageChip page={q.page} label={q.page_label} onOpen={onOpen} /></div>}
+        : <div className={`alert ${right ? "alert-ok" : "alert-error"} stack gap-8`} role="status"><span><strong>{right ? "Correct." : "Not quite."}</strong> <Rich text={q.explanation ?? ""} /></span><PageChip page={q.page} label={q.page_label} onOpen={onOpen} /></div>}
     </section>
   );
 }

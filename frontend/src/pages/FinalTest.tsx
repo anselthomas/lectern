@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, showLimit } from "../api";
-import { chName, chNo, ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
+import { chName, chNo, ErrorBox, Loading, Rich, PageChip, SourceViewer, Spinner } from "../components";
 import { useApi } from "../state";
 import { QuizRunner } from "./Quiz";
 
@@ -40,7 +40,7 @@ export default function FinalTest() {
           return (
             <div key={q.id} className="stack gap-8" style={{ paddingBottom: 14, borderBottom: "1px solid var(--bg-3)" }}>
               <div className="row gap-8 wrap"><span className={`badge ${r?.correct ? "badge-ok" : "badge-warn"}`}>{r?.correct ? "Correct" : given ? "Missed" : "Not answered"}</span><span className="small muted">Q{k + 1} · Ch. {chNo(q)}</span></div>
-              <strong>{q.question}</strong>
+              <strong><Rich text={q.question} /></strong>
               {given && <span className="small"><span className="muted">You said:</span> {given}</span>}
               {!r?.correct && r?.correct_answer && <span className="small"><span className="muted">Answer:</span> {r.correct_answer}</span>}
               {!r?.correct && (r?.explanation || r?.feedback) && <span className="small muted">{r.explanation || r.feedback}</span>}

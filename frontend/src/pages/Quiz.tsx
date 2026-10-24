@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, trackStudy } from "../api";
-import { chName, chNo, ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
+import { chName, chNo, ErrorBox, Loading, Rich, PageChip, SourceViewer, Spinner } from "../components";
 import { VoiceInput } from "../voice";
 import { useApi } from "../state";
 
@@ -55,12 +55,12 @@ export function QuizRunner({ quiz, bookId, onSubmit, timed, header }: { quiz: an
         <div className="row gap-8 wrap"><span className="badge badge-muted">{q.type === "mcq" ? "Multiple choice" : "Short answer"}</span>
           {q.section_title && <span className="small muted">Section {q.section_n} · {q.section_title}</span>}
           {q.chapter_title && <span className="small muted">{chName(q)}</span>}</div>
-        <p style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.45 }}>{q.question}</p>
+        <p style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.45 }}><Rich text={q.question} /></p>
         {q.type === "mcq" ? (
           <div className="stack gap-8" role="radiogroup" aria-label="Answer">
             {q.options.map((o: string, k: number) => {
               const cls = result ? (o === result.correct_answer ? " correct" : k === answer ? " wrong" : "") : "";
-              return <button key={k} className={`option${cls}`} role="radio" aria-checked={answer === k} disabled={!!result} onClick={() => setAnswers({ ...answers, [q.id]: k })}><span className="key">{"ABCD"[k]}</span>{o}</button>;
+              return <button key={k} className={`option${cls}`} role="radio" aria-checked={answer === k} disabled={!!result} onClick={() => setAnswers({ ...answers, [q.id]: k })}><span className="key">{"ABCD"[k]}</span><span><Rich text={o} /></span></button>;
             })}
           </div>
         ) : (
@@ -75,9 +75,9 @@ export function QuizRunner({ quiz, bookId, onSubmit, timed, header }: { quiz: an
         )}
         {result && (
           <div className={`alert ${result.correct ? "alert-ok" : "alert-error"} stack gap-8`} role="status">
-            <span><strong>{result.correct ? "Correct." : "Not quite."}</strong> {result.feedback}</span>
-            {!result.correct && q.type === "short" && <span><strong>A good answer:</strong> {result.correct_answer}</span>}
-            {result.explanation && result.explanation !== result.feedback && <span className="small">{result.explanation}</span>}
+            <span><strong>{result.correct ? "Correct." : "Not quite."}</strong> <Rich text={result.feedback ?? ""} /></span>
+            {!result.correct && q.type === "short" && <span><strong>A good answer:</strong> <Rich text={String(result.correct_answer ?? "")} /></span>}
+            {result.explanation && result.explanation !== result.feedback && <span className="small"><Rich text={result.explanation} /></span>}
             <PageChip page={result.page} label={result.page_label} onOpen={setViewer} />
           </div>
         )}
