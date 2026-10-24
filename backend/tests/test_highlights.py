@@ -28,3 +28,14 @@ def test_running_twice_changes_nothing():
               {"type": "para", "text": "The dose matters."}]
     once = highlight_blocks(blocks)
     assert highlight_blocks(once) == once
+
+
+def test_backfill_keeps_only_unchanged_wording(monkeypatch):
+    from app import content
+    blocks = [{"type": "para", "text": "Drugs come from plants and minerals."},
+              {"type": "para", "text": "Potency is diluted step by step."}]
+    reply = {"texts": ["Drugs come from ==plants and minerals==.", "Potency is ==reduced== gradually."]}
+    monkeypatch.setattr(content.llm, "call_json", lambda **kw: (reply, None))
+    out, _ = content.add_highlights(blocks)
+    assert out[0]["text"] == "Drugs come from ==plants and minerals==."
+    assert out[1]["text"] == "Potency is diluted step by step."  # the model changed the words, so it's ignored

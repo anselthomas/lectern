@@ -77,9 +77,37 @@ def backfill_usage() -> None:
     print(f"backfilled {n} user-months")
 
 
+def highlight_lessons() -> None:
+    """One-off: add highlighter marks to lessons written before lessons were highlighted."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from . import content, telemetry
+    from .models import Book, Chapter, Lesson, Section
+
+    with SessionLocal() as db:
+        done = 0
+        for lesson in db.query(Lesson).all():
+            blocks = lesson.body.get("blocks", [])
+            if any("==" in (b.get("text") or "") for b in blocks):
+                continue
+            sec = db.get(Section, lesson.section_id)
+            ch = db.get(Chapter, sec.chapter_id)
+            book = db.get(Book, ch.book_id)
+            try:
+                with telemetry.scope(user_id=book.user_id, book_id=book.id, chapter_id=ch.id, feature="highlights"):
+                    lesson.body["blocks"], _ = content.add_highlights(blocks)
+            except Exception as e:  # noqa: BLE001 - keep going; an unhighlighted lesson still works
+                print(f"lesson {lesson.id}: {e}")
+                continue
+            flag_modified(lesson, "body")
+            db.commit()
+            done += 1
+    print(f"highlighted {done} lessons")
+
+
 if __name__ == "__main__":
-    if len(sys.argv) == 2 and sys.argv[1] == "backfill-usage":
-        backfill_usage()
+    if len(sys.argv) == 2 and sys.argv[1] in ("backfill-usage", "highlight-lessons"):
+        {"backfill-usage": backfill_usage, "highlight-lessons": highlight_lessons}[sys.argv[1]]()
         sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[1] == "grant-internal":
         grant_internal(sys.argv[2])

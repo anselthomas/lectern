@@ -180,6 +180,7 @@ def highlight_blocks(blocks: list[dict]) -> list[dict]:
     """
     terms = sorted({b["term"].strip() for b in blocks if b.get("type") == "key_term" and b.get("term")},
                    key=len, reverse=True)
+    terms = [t for t in terms if not any(re.search(rf"=={re.escape(t)}==", b.get("text") or "", re.I) for b in blocks)]
     out = []
     for b in blocks:
         text = b.get("text") or ""
@@ -197,15 +198,42 @@ def highlight_blocks(blocks: list[dict]) -> list[dict]:
             return f"=={phrase}=="
         text = HIGHLIGHT.sub(keep, text)
         if not kept:
-            for term in terms:
+            for term in list(terms):
                 if kept >= 2:
                     break
                 m = re.search(rf"(?<![\w=*]){re.escape(term)}(?![\w=*])", text, re.I)
                 if m:
                     text = f"{text[:m.start()]}=={m.group(0)}=={text[m.end():]}"
                     kept += 1
+                    terms.remove(term)  # a term is highlighted once per lesson, where it first comes up
         out.append({**b, "text": text})
     return out
+
+
+HIGHLIGHT_SCHEMA = {
+    "type": "object", "required": ["texts"],
+    "properties": {"texts": {"type": "array", "items": {"type": "string"}}},
+}
+
+
+def add_highlights(blocks: list[dict], background: bool = True) -> tuple[list[dict], llm.Usage | None]:
+    """Mark the key phrases in an already-written lesson. A rewritten block is used only if its words are unchanged."""
+    idx = [i for i, b in enumerate(blocks) if b.get("type") in ("para", "example") and "==" not in (b.get("text") or "")]
+    if not idx:
+        return blocks, None
+    numbered = "\n".join(f"{k + 1}. {blocks[i]['text']}" for k, i in enumerate(idx))
+    data, usage = llm.call_json(
+        system=SYSTEM_TEACHER, tool_name="highlights", schema=HIGHLIGHT_SCHEMA, max_tokens=4000, background=background,
+        prompt="Highlight these lesson paragraphs like a good student with a highlighter pen. Return every paragraph, "
+               "in order, with its words exactly unchanged, wrapping the 1-3 phrases worth remembering (a key term where "
+               "it is explained, the central claim, a number or rule to learn) in ==double equals==. Keep each "
+               "highlight to a few words, never a whole sentence.\n\n" + numbered)
+    out = [dict(b) for b in blocks]
+    squash = lambda s: re.sub(r"\s+", " ", HIGHLIGHT.sub(r"\1", s)).strip()
+    for i, new in zip(idx, data.get("texts") or []):
+        if isinstance(new, str) and squash(new) == squash(blocks[i]["text"]):
+            out[i]["text"] = new
+    return highlight_blocks(out), usage
 
 
 def generate_lesson(db: Session, book: Book, ch: Chapter, sec: Section, level: str,
