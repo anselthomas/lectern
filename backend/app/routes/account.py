@@ -156,6 +156,21 @@ def track(body: PageView, user: User = Depends(current_user)):
     return {"ok": True}
 
 
+class ClientEvent(BaseModel):
+    type: Literal["upload_problem"]
+    reason: str = Field(max_length=40)
+    detail: dict = Field(default_factory=dict)
+    agent: str = Field(default="", max_length=200)
+
+
+@router.post("/client-event")
+def client_event(body: ClientEvent, user: User = Depends(current_user)):
+    """Problems only the browser sees (a file rejected before upload, a failed transfer to S3)."""
+    detail = {k: (str(v)[:200] if not isinstance(v, (int, float, bool)) else v) for k, v in list(body.detail.items())[:8]}
+    telemetry.event(body.type, user_id=user.id, reason=body.reason, agent=body.agent, **detail)
+    return {"ok": True}
+
+
 class Activity(BaseModel):
     book_id: str
     seconds: int = Field(ge=1, le=600)

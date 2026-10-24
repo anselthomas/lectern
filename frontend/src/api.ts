@@ -85,6 +85,12 @@ export function uploadToS3(url: string, file: File, onProgress: (p: number) => v
 let pending = 0;
 let timer: number | undefined;
 /** Count study time while a learning page is open and visible; flushed every minute. */
+/** Upload failures that happen in the browser never reach the API on their own; report them so they show up
+ * in the admin activity. Best effort only. */
+export function reportUploadProblem(reason: "not_pdf" | "upload_failed", detail: Record<string, unknown>) {
+  api("/client-event", { body: { type: "upload_problem", reason, detail, agent: navigator.userAgent.slice(0, 200) } }).catch(() => undefined);
+}
+
 export function trackStudy(bookId: string) {
   let last = Date.now();
   const tick = () => {

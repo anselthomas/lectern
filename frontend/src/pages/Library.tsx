@@ -1,6 +1,6 @@
 import { DragEvent, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, ApiError, showLimit, uploadToS3 } from "../api";
+import { api, ApiError, reportUploadProblem, showLimit, uploadToS3 } from "../api";
 import { chName, Cover, ErrorBox, Loading, Spinner } from "../components";
 import { useApi, useMe } from "../state";
 
@@ -12,7 +12,14 @@ export function UploadBox({ onDone }: { onDone: (book: any) => void }) {
   const [err, setErr] = useState<any>(null);
   const start = async (f: File) => {
     setErr(null);
-    if (!f.name.toLowerCase().endsWith(".pdf") && f.type !== "application/pdf") { setErr(new Error("That isn't a PDF. Choose a .pdf file.")); return; }
+    // Phones often hand over files named "1000034521" with no type, so look at the bytes: every PDF starts with %PDF.
+    const head = await f.slice(0, 1024).text().catch(() => "");
+    if (!head.includes("%PDF")) {
+      const reason = f.size === 0 ? "That file is empty. Try saving it to your phone first, then choose it again." : "That isn't a PDF. Choose a .pdf file.";
+      setErr(new Error(reason));
+      reportUploadProblem("not_pdf", { name: f.name.slice(-60), type: f.type, size: f.size });
+      return;
+    }
     setFile(f); setProgress(0);
     let created: string | null = null;
     try {
@@ -22,6 +29,7 @@ export function UploadBox({ onDone }: { onDone: (book: any) => void }) {
       const done = await api(`/books/${book.id}/uploaded`, { method: "POST", retry: true });
       onDone(done);
     } catch (e) {
+      reportUploadProblem("upload_failed", { name: f.name.slice(-60), size: f.size, error: String((e as any)?.message ?? e).slice(0, 200) });
       // Don't leave a half-made book stuck at "uploading" in the library.
       if (created) api(`/books/${created}`, { method: "DELETE" }).catch(() => undefined);
       setProgress(null); setFile(null);
@@ -35,7 +43,7 @@ export function UploadBox({ onDone }: { onDone: (book: any) => void }) {
       <div className={`dropzone${over ? " over" : ""}`} role="button" tabIndex={0} aria-label="Upload a PDF"
         onClick={() => progress === null && input.current?.click()} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && input.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}>
-        <input ref={input} type="file" accept="application/pdf,.pdf" hidden data-testid="pdf-input" onChange={(e) => e.target.files?.[0] && start(e.target.files[0])} />
+        <input ref={input} type="file" accept="application/pdf,.pdf" hidden data-testid="pdf-input" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) start(f); }} />
         {progress === null ? (
           <div className="stack gap-8" style={{ alignItems: "center" }}>
             <strong style={{ fontSize: 17 }}>Drop a PDF here or <span style={{ color: "var(--accent)" }}>browse your files</span></strong>
