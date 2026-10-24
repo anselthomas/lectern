@@ -340,11 +340,15 @@ def build_quiz(db: Session, book: Book, ch: Chapter, sections: list[Section]) ->
 VERIFY_SCHEMA = {
     "type": "object", "required": ["questions"],
     "properties": {"questions": {"type": "array", "items": {
-        "type": "object", "required": ["n", "correct_index", "explanation"],
+        "type": "object", "required": ["n", "correct_option", "explanation"],
         "properties": {"n": {"type": "integer"},
-                       "correct_index": {"type": "integer", "description": "0-based; -1 if no option or more than one option is right"},
+                       "correct_option": {"type": "string", "description": "The right option's text, copied exactly; NONE if no single option is right"},
                        "explanation": {"type": "string"}}}}},
 }
+
+
+def _norm_option(s) -> str:
+    return re.sub(r"\W+", " ", str(s or "")).strip().lower()
 
 
 def verify_mcqs(questions: list[dict], text: str) -> tuple[list[dict], llm.Usage]:
@@ -353,22 +357,24 @@ def verify_mcqs(questions: list[dict], text: str) -> tuple[list[dict], llm.Usage
     mcqs = [q for q in questions if q["type"] == "mcq"]
     if not mcqs:
         return questions, llm.Usage()
-    listing = "\n\n".join(f"{k + 1}. {q['question']}\n" + "\n".join(f"  {j}) {o}" for j, o in enumerate(q["options"]))
+    listing = "\n\n".join(f"{k + 1}. {q['question']}\n" + "\n".join(f"  - {o}" for o in q["options"])
                           for k, q in enumerate(mcqs))
     data, usage = llm.call_json(
         system=SYSTEM_TEACHER, tool_name="check_quiz", schema=VERIFY_SCHEMA, max_tokens=3000, background=True,
         prompt="Check each multiple-choice question against the pages below as a careful examiner. For each, give the "
-               "0-based index of the one option the pages support, or -1 if none or more than one option is right "
-               "(watch NOT/EXCEPT wording). Then a one-sentence explanation of why that option is right, from the "
+               "text of the one option the pages support, copied exactly, or NONE if no option or more than one "
+               "option is right (watch NOT/EXCEPT wording). Then a one-sentence explanation of why that option is right, from the "
                f"pages.\n\nQuestions:\n{listing}\n\nPages:\n{text}")
     verdicts = {v.get("n"): v for v in data.get("questions") or []}
     out = []
     for q in questions:
         v = verdicts.get(mcqs.index(q) + 1) if q["type"] == "mcq" else None
         if v is not None:
-            k = v.get("correct_index")
-            if not isinstance(k, int) or not (0 <= k < len(q["options"])):
+            pick = _norm_option(v.get("correct_option"))
+            matches = [j for j, o in enumerate(q["options"]) if _norm_option(o) == pick]
+            if len(matches) != 1:
                 continue  # the examiner found no single right answer
+            k = matches[0]
             if k != q["answer_index"]:
                 q = {**q, "answer_index": k}
             q = {**q, "explanation": v.get("explanation") or q.get("explanation")}
