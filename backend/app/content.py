@@ -423,7 +423,7 @@ REVIEW_MATTER = re.compile(rf"^\s*(chapter(\s+\w+)?\s+)?{_REVIEW_TERM}(\s*(,|and
 
 
 MAX_LESSONS = 8
-GENERIC_OPENER = re.compile(r"^(introduction|overview|preview|learning objectives)$", re.I)
+GENERIC_OPENER = re.compile(r"^(introduction|overview|preview|(chapter |learning )?(objectives|outcomes|outline)|chapter (introduction|opener))$", re.I)
 
 
 def group_hints(hints: list[dict], start: int, end: int) -> list[list[dict]]:
