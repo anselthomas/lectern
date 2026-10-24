@@ -169,7 +169,7 @@ export function SourceViewer({ bookId, page, onClose, quote }: { bookId: string;
   return (
     <Modal onClose={onClose} wide label={`Source page ${meta?.label ?? n}`}>
       <div className="row between wrap gap-12" style={{ padding: "14px 20px", borderBottom: "1px solid var(--line)" }}>
-        <button className="btn btn-sm btn-secondary" onClick={onClose}>← Back to lesson</button>
+        <button className="btn btn-sm btn-secondary" onClick={onClose}>← Back</button>
         <div className="row gap-8">
           <button className="btn btn-sm btn-secondary" disabled={n <= 1} onClick={() => setN(n - 1)} aria-label="Previous page">‹</button>
           <span className="mono">Page {meta?.label ?? n}{meta ? ` · PDF ${n} of ${meta.pages}` : ""}</span>

@@ -2,6 +2,7 @@ import csv
 import json
 import io
 from datetime import date, datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
@@ -28,6 +29,7 @@ def me_out(db: Session, user: User) -> dict:
         "id": str(user.id), "email": user.email, "name": user.name, "onboarded": user.onboarded,
         "goal": user.goal, "level_default": user.level_default, "daily_minutes": user.daily_minutes,
         "target_recall": user.target_recall, "reminders": user.reminders, "is_admin": user.is_admin,
+        "notify_prefs": {"ready": True, "product": True, **(user.notify_prefs or {})},
         "usage": usage_summary(db, user),
     }
 
@@ -46,6 +48,7 @@ class Prefs(BaseModel):
     daily_minutes: int | None = Field(default=None, ge=5, le=720)  # up to 12 h for intensive study
     target_recall: float | None = Field(default=None, ge=0.7, le=0.97)
     reminders: bool | None = None
+    notify_prefs: dict[Literal["ready", "product"], bool] | None = None
     onboarded: bool | None = None
 
 
@@ -54,6 +57,8 @@ def update_me(body: Prefs, user: User = Depends(current_user), db: Session = Dep
     data = body.model_dump(exclude_none=True)
     if data.get("level_default") == "exam" and not (user.limits_exempt or user.plan.limits.get("exam")):
         raise HTTPException(402, {"code": "exam_requires_pro", "message": "Exam-level explanations need Pro."})
+    if "notify_prefs" in data:
+        data["notify_prefs"] = {**(user.notify_prefs or {}), **data["notify_prefs"]}
     for k, v in data.items():
         setattr(user, k, v)
     db.commit()

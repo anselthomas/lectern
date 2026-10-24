@@ -15,6 +15,7 @@ export default function Notes() {
   const [page, setPage] = useState("");
   const [viewer, setViewer] = useState<number | null>(null);
   const [err, setErr] = useState<any>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
   if (error) return <div className="page"><ErrorBox error={error} /></div>;
   if (!notes || !book) return <Loading />;
   const chapters = book.chapters.filter((c: any) => c.kind === "chapter" || c.kind === "appendix");
@@ -48,7 +49,10 @@ export default function Notes() {
         <div className="stack gap-12">{shown.map((n) => (
           <div key={n.id} className="card-sm stack gap-8">
             <div className="row between gap-8"><span className="row gap-8"><span className={`badge ${n.kind === "highlight" ? "badge-warn" : "badge-accent"}`}>{n.kind === "highlight" ? "Highlight" : "Note"}</span>{n.chapter_n && <span className="small muted">Ch. {n.chapter_n}</span>}<PageChip page={n.pdf_page} label={n.page_label} onOpen={setViewer} /></span>
-              <button className="link-btn small" onClick={async () => { await api(`/notes/${n.id}`, { method: "DELETE" }); reload(true); }}>Delete</button></div>
+              {confirming === n.id ? <span className="row gap-8 small"><span className="muted">Delete?</span>
+                <button className="link-btn small" style={{ color: "var(--bad)" }} onClick={async () => { await api(`/notes/${n.id}`, { method: "DELETE" }); setConfirming(null); reload(true); }}>Yes, delete</button>
+                <button className="link-btn small" onClick={() => setConfirming(null)}>Keep</button></span>
+                : <button className="link-btn small" aria-label={`Delete ${n.kind === "highlight" ? "highlight" : "note"}${n.page_label ? ` on page ${n.page_label}` : ""}`} onClick={() => setConfirming(n.id)}>Delete</button>}</div>
             {n.quote && <p className="reading" style={{ fontSize: 16 }}>“{n.quote}”</p>}
             {n.text && <p>{n.kind === "highlight" ? <><strong>My note:</strong> {n.text}</> : n.text}</p>}
           </div>))}</div>}

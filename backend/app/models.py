@@ -44,6 +44,7 @@ class User(Base):
     daily_minutes: Mapped[int] = mapped_column(Integer, default=20)
     target_recall: Mapped[float] = mapped_column(Float, default=0.9)
     reminders: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_prefs: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")  # {"ready": false, ...}
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
     plan: Mapped[Plan] = relationship(lazy="joined")

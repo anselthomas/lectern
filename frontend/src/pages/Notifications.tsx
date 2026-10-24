@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { ErrorBox, Loading } from "../components";
-import { useApi } from "../state";
+import { useApi, useMe } from "../state";
 
 function ago(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -13,6 +14,19 @@ function ago(iso: string) {
 
 export default function Notifications() {
   const { data, error, reload } = useApi<any>("/notifications");
+  const { me, setMe } = useMe();
+  const [saving, setSaving] = useState(false);
+  const save = async (body: any) => {
+    setSaving(true);
+    try { setMe(await api("/me", { method: "PATCH", body })); } finally { setSaving(false); }
+  };
+  const prefs = me?.notify_prefs ?? {};
+  const prefRows: [string, boolean, (v: boolean) => void, boolean][] = [
+    ["Daily review reminder", !!me?.reminders, (v) => save({ reminders: v }), false],
+    ["Book or chapter ready", prefs.ready !== false, (v) => save({ notify_prefs: { ready: v } }), false],
+    ["Product updates", prefs.product !== false, (v) => save({ notify_prefs: { product: v } }), false],
+    ["Billing and receipts", true, () => undefined, true],
+  ];
   if (error) return <div className="page-narrow"><ErrorBox error={error} /></div>;
   if (!data) return <Loading />;
   return (
@@ -34,7 +48,9 @@ export default function Notifications() {
       <div className="card stack gap-12">
         <h3>Send me</h3>
         <table className="table data-table"><thead><tr><th>Type</th><th>In app</th><th>Email</th></tr></thead>
-          <tbody>{["Daily review reminder", "Book or chapter ready", "Streak at risk", "Billing and receipts", "Product updates"].map((t) => <tr key={t}><td data-label="Type">{t}</td><td data-label="In app"><input type="checkbox" defaultChecked aria-label={`${t} in app`} /></td><td data-label="Email"><input type="checkbox" disabled aria-label={`${t} email`} /></td></tr>)}</tbody></table>
+          <tbody>{prefRows.map(([t, value, set, locked]) => <tr key={t}><td data-label="Type">{t}</td>
+            <td data-label="In app"><input type="checkbox" checked={value} disabled={locked || saving} onChange={(e) => set(e.target.checked)} aria-label={`${t} in app`} /></td>
+            <td data-label="Email"><input type="checkbox" disabled checked={locked} aria-label={`${t} email`} /></td></tr>)}</tbody></table>
         <span className="small muted">Email notifications switch on once we finish setting up our sending domain. Billing emails are required while you have a paid plan.</span>
       </div>
     </div>

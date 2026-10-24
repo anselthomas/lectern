@@ -22,7 +22,15 @@ log = logging.getLogger("lectern.worker")
 stop = threading.Event()
 
 
+NOTIFY_PREF = {"book_ready": "ready", "chapter_ready": "ready"}
+
+
 def notify(db, user_id, type_, title, body="", link=None):
+    """Add a notification. A rebuild or re-detect replaces the earlier one about the same thing instead of stacking up."""
+    if (db.get(User, user_id).notify_prefs or {}).get(NOTIFY_PREF.get(type_, type_)) is False:
+        return
+    if link:
+        db.query(Notification).filter_by(user_id=user_id, type=type_, link=link).delete()
     db.add(Notification(user_id=user_id, type=type_, title=title, body=body, link=link))
 
 
@@ -247,6 +255,23 @@ def build_lesson(section_id: str, level: str) -> None:
             log.info("lesson for section %s/%s no longer needed", section_id, level)
 
 
+# ---------------------------------------------------------------- reminders
+
+def send_review_reminders() -> None:
+    """At most one in-app "cards are due" reminder per learner a day, for those who left reminders on."""
+    with SessionLocal() as db:
+        rows = db.execute(text("""
+            SELECT c.user_id, count(*) FROM cards c JOIN users u ON u.id = c.user_id
+            WHERE u.reminders AND c.due_at <= now()
+              AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.user_id = c.user_id AND n.type = 'review_reminder'
+                              AND n.created_at > now() - interval '20 hours')
+            GROUP BY c.user_id""")).all()
+        for user_id, n in rows:
+            notify(db, user_id, "review_reminder", f"{n} flashcard{'s' if n != 1 else ''} due",
+                   "A few minutes of review now keeps them from slipping.", "/review")
+        db.commit()
+
+
 HANDLERS = {"ingest_book": ingest_book, "embed_book": embed_book, "build_chapter": build_chapter,
             "build_lesson": build_lesson}
 
@@ -282,7 +307,11 @@ def main() -> None:
     for t in threads:
         t.start()
     while not stop.is_set():
-        time.sleep(1)
+        try:
+            send_review_reminders()
+        except Exception:  # noqa: BLE001 - a missed reminder must not stop the worker
+            log.exception("review reminders failed")
+        stop.wait(600)
 
 
 if __name__ == "__main__":

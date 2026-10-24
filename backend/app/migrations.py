@@ -13,6 +13,11 @@ STATEMENTS = [
     # 2026-10-24: admin dashboard.
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin boolean NOT NULL DEFAULT false",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at timestamptz",
+    # 2026-10-24: per-type notification switches.
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_prefs jsonb NOT NULL DEFAULT '{}'",
+    # 2026-10-24: rebuilds used to stack "Chapter N is ready" notifications; keep only the newest of each.
+    "DELETE FROM notifications a USING notifications b WHERE a.user_id = b.user_id AND a.type = b.type "
+    "AND a.link = b.link AND a.created_at < b.created_at",
 ]
 
 
