@@ -12,6 +12,13 @@ Turn any book into a course you actually finish. Upload a PDF; Lectern finds the
 
 Each chapter runs the same loop: chapter map → pre-question → short sections with quick checks → explain it back → chapter quiz → missed ideas become flashcards (FSRS) → review → final test.
 
+Along the way:
+
+- **Highlights.** Every lesson paragraph has its 1–3 key phrases marked like a student's highlighter (the model picks exact phrases; the server places the marks). Readers can switch them off.
+- **Checked quizzes.** Each multiple-choice question is re-read against the book by an examiner pass; disagreements with the answer key go two out of three, and questions nobody can settle are dropped.
+- **Book-shaped structure.** Chapters keep the book's own numbering (Chapter 7, Appendix B), short subsections are grouped into lessons without losing their titles, and end-of-chapter review pages fold into the last lesson.
+- **Readable for any subject.** Inline code, powers (10^-3) and sub/superscripts render properly in lessons, quizzes and flashcards.
+
 ## Architecture
 
 ```
