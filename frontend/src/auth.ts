@@ -2,11 +2,14 @@ import {
   AuthenticationDetails, CognitoUser, CognitoUserAttribute, CognitoUserPool, CognitoUserSession,
 } from "amazon-cognito-identity-js";
 
-// Public identifiers (not secrets): the user pool and its web client.
-const pool = new CognitoUserPool({
-  UserPoolId: import.meta.env.VITE_USER_POOL_ID ?? "ap-southeast-2_dFgngd69S",
-  ClientId: import.meta.env.VITE_CLIENT_ID ?? "7k4milc0t8l171o4rde2mb6h0k",
-});
+// Public identifiers (not secrets) of the user pool and its web client, supplied at build time:
+// deploy/deploy-web.sh reads them from the CloudFormation stack (see frontend/.env.example for local builds).
+function env(name: "VITE_USER_POOL_ID" | "VITE_CLIENT_ID"): string {
+  const value = import.meta.env[name];
+  if (!value) throw new Error(`${name} is not set; build with deploy/deploy-web.sh or a .env.local file`);
+  return value;
+}
+const pool = new CognitoUserPool({ UserPoolId: env("VITE_USER_POOL_ID"), ClientId: env("VITE_CLIENT_ID") });
 
 function user(email: string) {
   return new CognitoUser({ Username: email.trim().toLowerCase(), Pool: pool });

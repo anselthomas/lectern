@@ -8,6 +8,8 @@ REGION=ap-southeast-2
 export MSYS_NO_PATHCONV=1
 POOL=$(aws cloudformation describe-stacks --stack-name lectern-core --region $REGION --profile "$PROFILE" \
   --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
+SITE=$(aws cloudformation describe-stacks --stack-name lectern-core --region $REGION --profile "$PROFILE" \
+  --query "Stacks[0].Outputs[?OutputKey=='CloudFrontUrl'].OutputValue" --output text)
 PW=$(python -c "import secrets,string;a=string.ascii_letters+string.digits;print('Lt'+''.join(secrets.choice(a) for _ in range(18))+'7q')")
 
 aws cognito-idp admin-create-user --user-pool-id "$POOL" --username "$EMAIL" --message-action SUPPRESS \
@@ -16,7 +18,7 @@ aws cognito-idp admin-create-user --user-pool-id "$POOL" --username "$EMAIL" --m
 aws cognito-idp admin-set-user-password --user-pool-id "$POOL" --username "$EMAIL" --password "$PW" --permanent \
   --region $REGION --profile "$PROFILE"
 aws ssm put-parameter --name /lectern/test-user --type SecureString --overwrite \
-  --value "{\"email\":\"$EMAIL\",\"password\":\"$PW\",\"url\":\"https://d1c6wdw7xblc4l.cloudfront.net/signin\"}" \
+  --value "{\"email\":\"$EMAIL\",\"password\":\"$PW\",\"url\":\"$SITE/signin\"}" \
   --region $REGION --profile "$PROFILE" >/dev/null
 
 # Mark the account internal (no plan limits) in the app database.
