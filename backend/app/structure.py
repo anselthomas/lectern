@@ -239,6 +239,7 @@ def detect(doc: fitz.Document, texts: list[str], offset: int | None,
             continue
         specs = sanitize(specs, n)
         if specs and pdf.outline_usable(specs, n):
+            name_bare_titles(specs, texts)
             try:
                 attach_section_hints(specs, texts, offset)
             except Exception as e:  # hints are a bonus; never fail detection over them
@@ -247,6 +248,24 @@ def detect(doc: fitz.Document, texts: list[str], offset: int | None,
     if n <= SHORT_DOC_PAGES:
         return [pdf.ChapterSpec(title=WHOLE_DOCUMENT, pdf_start=1, pdf_end=n)], "whole document"
     return [], None
+
+
+BARE_TITLE = re.compile(r"^(section|chapter|part|unit|module|lesson|book)?\s*([\dIVXLC]+|one|two|three|four|five|six|"
+                        r"seven|eight|nine|ten)[.:]?$", re.I)
+PAGE_TAG = re.compile(r"^(\d+[-.]\d+|\d+|(section|chapter|part|unit)\s+[\dIVXLC]+)[.:\s-]*", re.I)
+
+
+def name_bare_titles(specs: list[pdf.ChapterSpec], texts: list[str]) -> None:
+    """A contents line like "Section 13" with the name only on the chapter's own first page: borrow that heading."""
+    for s in specs:
+        if not BARE_TITLE.match(s.title.strip()) or not (0 < s.pdf_start <= len(texts)):
+            continue
+        for line in [l.strip() for l in texts[s.pdf_start - 1].splitlines() if l.strip()][:6]:
+            name = PAGE_TAG.sub("", line).strip(" .:-")
+            if 3 <= len(name) <= 80 and re.search(r"[A-Za-z]{3}", name) and not BARE_TITLE.match(name):
+                s.title = f"{s.title.strip()} {name}"
+                s.kind = pdf.kind_for(name)
+                break
 
 
 def collapse_short(specs: list[pdf.ChapterSpec], page_count: int) -> list[pdf.ChapterSpec]:

@@ -156,3 +156,14 @@ def test_section_hints_from_contents_lines():
     structure.attach_section_hints(specs, texts, offset)
     assert [c["title"] for c in specs[0].children] == ["Pharmacy and Pharmacopoeia", "Pharmacology", "Sources of Drugs"]
     assert [c["pdf_page"] for c in specs[1].children] == [33, 39, 46]
+
+
+def test_bare_contents_titles_take_the_page_heading():
+    from app.pdf import ChapterSpec
+    from app.structure import name_bare_titles
+    specs = [ChapterSpec(title="Section 12 Miscellaneous", pdf_start=1, pdf_end=1),
+             ChapterSpec(title="Section 13", pdf_start=2, pdf_end=2),
+             ChapterSpec(title="Chapter 4", pdf_start=3, pdf_end=3)]
+    name_bare_titles(specs, ["Section 12\nMiscellaneous", "13-1 Glossary\nAcid: a compound", "4\nChapter 4\n12"])
+    assert [s.title for s in specs] == ["Section 12 Miscellaneous", "Section 13 Glossary", "Chapter 4"]
+    assert specs[1].kind == "back"
