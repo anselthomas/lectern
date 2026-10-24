@@ -48,7 +48,17 @@ export function resendCode(email: string): Promise<void> {
     user(email).resendConfirmationCode((err) => (err ? reject(err) : resolve())));
 }
 
-export function signIn(email: string, password: string): Promise<CognitoUserSession> {
+/** Passwords pasted from a chat app often bring a space along; if the exact text fails, try it trimmed once. */
+export async function signIn(email: string, password: string): Promise<CognitoUserSession> {
+  try {
+    return await signInExact(email, password);
+  } catch (e: any) {
+    if (e?.code === "NotAuthorizedException" && password.trim() && password.trim() !== password) return signInExact(email, password.trim());
+    throw e;
+  }
+}
+
+function signInExact(email: string, password: string): Promise<CognitoUserSession> {
   return new Promise((resolve, reject) => {
     user(email).authenticateUser(new AuthenticationDetails({ Username: email.trim().toLowerCase(), Password: password }), {
       onSuccess: resolve,

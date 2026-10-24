@@ -29,8 +29,15 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function Field({ id, label, ...props }: { id: string; label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
-  return <div className="field"><label htmlFor={id}>{label}</label><input id={id} className="input" {...props} /></div>;
+function Field({ id, label, type, ...props }: { id: string; label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+  // Password fields get a Show button: look-alike characters (l and I, O and 0) are easy to mistype from a message.
+  const [shown, setShown] = useState(false);
+  const input = <input id={id} className="input" type={type === "password" && shown ? "text" : type} {...props}
+    {...(type === "password" ? { autoCapitalize: "none", autoCorrect: "off", spellCheck: false, style: { paddingRight: 64, fontFamily: shown ? "var(--mono)" : undefined } } : {})} />;
+  return <div className="field"><label htmlFor={id}>{label}</label>
+    {type === "password" ? <div style={{ position: "relative" }}>{input}
+      <button type="button" className="link-btn small" aria-pressed={shown} aria-label={shown ? "Hide password" : "Show password"}
+        style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)" }} onClick={() => setShown(!shown)}>{shown ? "Hide" : "Show"}</button></div> : input}</div>;
 }
 
 export function SignIn() {
