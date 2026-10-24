@@ -105,7 +105,7 @@ def lesson_out(db: Session, book_id, body: dict) -> dict:
         return labels.get(str(p)) or label_for(db, book_id, p) if p else None
     return {
         "minutes": body.get("minutes"),
-        "blocks": [{**b, "page_label": lab(b.get("page"))} for b in body.get("blocks", [])],
+        "blocks": [{**b, "page_label": lab(b.get("page"))} for b in content.highlight_blocks(body.get("blocks", []))],
         "quick_checks": [{**q, "page_label": lab(q.get("page"))} for q in body.get("quick_checks", [])],
     }
 
@@ -163,7 +163,7 @@ def complete_section(section_id: str, user: User = Depends(current_user), db: Se
         existing = {c.front for c in db.query(Card).filter_by(user_id=user.id, chapter_id=ch.id)}
         for b in (lesson.body.get("blocks", []) if lesson else []):
             if b.get("type") == "key_term" and b.get("term") and b["term"] not in existing:
-                db.add(Card(user_id=user.id, book_id=book.id, chapter_id=ch.id, front=b["term"], back=b["text"],
+                db.add(Card(user_id=user.id, book_id=book.id, chapter_id=ch.id, front=b["term"], back=content.HIGHLIGHT.sub(r"\1", b["text"]),
                             pdf_page=b.get("page"), tag=f"{ch.n}.{sec.n} {sec.title}"[:80], source="key_term",
                             fsrs=srs.new_state()))
     db.commit()

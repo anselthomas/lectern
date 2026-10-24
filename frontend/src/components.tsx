@@ -204,10 +204,17 @@ export function Toast({ text, onDone }: { text: string; onDone: () => void }) {
   return <div className="toast" role="status">{text}</div>;
 }
 
-/** Renders **bold** inside model text without allowing HTML. */
+/** Model text without its ==highlight== and **bold** markers, e.g. for quoting against the page. */
+export const plain = (text: string) => text.replace(/==([^=\n]+?)==/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1");
+
+/** Renders **bold** and ==highlighter== marks inside model text without allowing HTML. */
 export function Rich({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return <>{parts.map((p, i) => p.startsWith("**") && p.endsWith("**") ? <strong key={i}>{p.slice(2, -2)}</strong> : <span key={i}>{p}</span>)}</>;
+  const parts = text.split(/(\*\*[^*]+\*\*|==[^=\n]+?==)/g);
+  return <>{parts.map((p, i) => {
+    if (p.length > 4 && p.startsWith("**") && p.endsWith("**")) return <strong key={i}>{p.slice(2, -2)}</strong>;
+    if (p.length > 4 && p.startsWith("==") && p.endsWith("==")) return <mark key={i} className="hl"><Rich text={p.slice(2, -2)} /></mark>;
+    return <span key={i}>{p}</span>;
+  })}</>;
 }
 
 /** Multi-line model text: paragraphs, plus "- " / "• " / "1. " lines rendered as lists. */

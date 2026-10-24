@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, trackStudy } from "../api";
-import { ErrorBox, Loading, PageChip, Rich, RichBlock, SourceViewer, Spinner, TopNav } from "../components";
+import { ErrorBox, Loading, PageChip, plain, Rich, RichBlock, SourceViewer, Spinner, TopNav } from "../components";
 import { VoiceInput } from "../voice";
 import { useMe } from "../state";
 
@@ -93,6 +93,11 @@ export default function Lesson() {
   const [viewer, setViewer] = useState<{ page: number; quote?: string } | null>(null);
   const [tutorOpen, setTutorOpen] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [highlights, setHighlights] = useState(() => { try { return localStorage.getItem("lectern.highlights") !== "off"; } catch { return true; } });
+  const toggleHighlights = () => {
+    setHighlights(!highlights);
+    try { localStorage.setItem("lectern.highlights", highlights ? "off" : "on"); } catch { /* per-device preference only */ }
+  };
 
   useEffect(() => {
     let alive = true, timer: number | undefined;
@@ -124,7 +129,7 @@ export default function Lesson() {
       nav(sec.next ? `/sections/${sec.next.id}?level=${level}` : `/chapters/${ch.id}/explain`);
     } finally { setBusy(false); }
   };
-  const open = (page: number, quote?: string) => setViewer({ page, quote });
+  const open = (page: number, quote?: string) => setViewer({ page, quote: quote && plain(quote) });
   const lesson = sec.lesson;
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
@@ -137,6 +142,8 @@ export default function Lesson() {
         <div className="seg" role="radiogroup" aria-label="Explanation level">
           {LEVELS.map(([v, l]) => <button key={v} role="radio" aria-checked={level === v} onClick={() => setParams({ level: v })}>{l}{v === "exam" && !(me?.usage?.limits_exempt || me?.usage?.plan?.limits?.exam) ? " · Pro" : ""}</button>)}
         </div>
+        <button className="btn btn-sm btn-ghost" aria-pressed={highlights} onClick={toggleHighlights} title="Show or hide the highlighted key phrases">
+          <mark className="hl" aria-hidden="true" style={highlights ? undefined : { background: "none" }}>ab</mark> Highlights {highlights ? "on" : "off"}</button>
         {!tutorOpen && <button className="btn btn-sm btn-secondary" onClick={() => setTutorOpen(true)}>Ask the tutor</button>}
       </div>
       <div className="lesson-shell">
@@ -150,7 +157,7 @@ export default function Lesson() {
           <Link to={`/chapters/${ch.id}/quiz`}>☑ Chapter quiz</Link>
         </nav>
         <main className="lesson-main">
-          <article>
+          <article className={highlights ? undefined : "no-hl"}>
             <div className="stack gap-8">
               <span className="mono muted">Section {ch.n}.{sec.n} · pp. {sec.pages_label}{lesson?.minutes ? ` · ~${lesson.minutes} min` : ""}</span>
               <h1>{sec.title}</h1>

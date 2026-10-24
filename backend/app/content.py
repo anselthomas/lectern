@@ -81,7 +81,7 @@ LESSON_SCHEMA = {
             "type": "object", "required": ["type", "text"],
             "properties": {
                 "type": {"type": "string", "enum": ["para", "heading", "key_term", "example", "formula"]},
-                "text": {"type": "string", "description": "Paragraph text, or the definition for key_term"},
+                "text": {"type": "string", "description": "Paragraph text with ==highlighted== key phrases, or the definition for key_term"},
                 "term": {"type": "string", "description": "Only for key_term"},
                 "page": {"type": "integer"}}}},
         "quick_checks": {"type": "array", "minItems": 1, "maxItems": 3, "items": {
@@ -168,6 +168,46 @@ def copied_blocks(blocks: list[dict], source: str, n: int = 12) -> int:
     return sum(1 for b in blocks if b.get("type") != "key_term" and _shingles(b.get("text", ""), n) & src)
 
 
+HIGHLIGHT = re.compile(r"==([^=\n]+?)==")
+MAX_HIGHLIGHTS, MAX_HIGHLIGHT_WORDS = 3, 12
+
+
+def highlight_blocks(blocks: list[dict]) -> list[dict]:
+    """Keep ==highlighter== marks short and sparse, like a student's, and only in prose.
+
+    Blocks the model left unmarked (and lessons written before highlights existed) get their
+    first mention of each key term highlighted instead. Safe to run more than once.
+    """
+    terms = sorted({b["term"].strip() for b in blocks if b.get("type") == "key_term" and b.get("term")},
+                   key=len, reverse=True)
+    out = []
+    for b in blocks:
+        text = b.get("text") or ""
+        if b.get("type") not in ("para", "example"):
+            out.append({**b, "text": HIGHLIGHT.sub(r"\1", text)})
+            continue
+        kept = 0
+
+        def keep(m: re.Match) -> str:
+            nonlocal kept
+            phrase = m.group(1).strip()
+            if not phrase or kept >= MAX_HIGHLIGHTS or len(phrase.split()) > MAX_HIGHLIGHT_WORDS:
+                return m.group(1)
+            kept += 1
+            return f"=={phrase}=="
+        text = HIGHLIGHT.sub(keep, text)
+        if not kept:
+            for term in terms:
+                if kept >= 2:
+                    break
+                m = re.search(rf"(?<![\w=*]){re.escape(term)}(?![\w=*])", text, re.I)
+                if m:
+                    text = f"{text[:m.start()]}=={m.group(0)}=={text[m.end():]}"
+                    kept += 1
+        out.append({**b, "text": text})
+    return out
+
+
 def generate_lesson(db: Session, book: Book, ch: Chapter, sec: Section, level: str,
                     background: bool) -> tuple[dict, llm.Usage]:
     text, labels = pages_text(db, book.id, sec.pdf_start, sec.pdf_end, max_chars=90_000)
@@ -177,7 +217,11 @@ def generate_lesson(db: Session, book: Book, ch: Chapter, sec: Section, level: s
         f"Level: {level}. {LEVELS[level]}\n"
         "Teach this section as a short lesson a learner can finish in about 8-15 minutes: 4-10 blocks mixing "
         "paragraphs (2-5 sentences each), 1-3 key_term blocks (term + one-sentence definition), and an example "
-        "or formula where the book has one. Each block cites the page it draws on. Then write 2 quick-check "
+        "or formula where the book has one. Each block cites the page it draws on. Highlight like a good student "
+        "with a highlighter pen: in each para and example block wrap the 1-3 phrases worth remembering (a key "
+        "term where it is explained, the central claim, a number or rule to learn) in ==double equals==, e.g. "
+        "'Enzymes ==lower the activation energy== of a reaction'. Keep each highlight to a few words, never a whole "
+        "sentence, and don't highlight filler. Then write 2 quick-check "
         "multiple-choice questions that test understanding (not recall of wording), with the correct "
         "answer_index (0-based), a one-sentence explanation and the page.\n"
         "Rules: teach in your own words; never copy the book's sentences (a key_term definition may quote at most "
@@ -196,6 +240,7 @@ def generate_lesson(db: Session, book: Book, ch: Chapter, sec: Section, level: s
         if copied_blocks(retry.get("blocks", []), text) < copied_blocks(data.get("blocks", []), text):
             data = retry
     lo, hi = sec.pdf_start, sec.pdf_end
+    data["blocks"] = highlight_blocks(data.get("blocks", []))
     for b in data.get("blocks", []):
         b["page"] = clamp(b.get("page"), lo, hi)
     checks = []
