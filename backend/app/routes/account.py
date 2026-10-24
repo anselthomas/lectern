@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
-from .. import vectors
+from .. import telemetry, vectors
 from ..auth import current_user
 from ..aws import cognito
 from ..config import settings
@@ -59,6 +59,9 @@ def update_me(body: Prefs, user: User = Depends(current_user), db: Session = Dep
         raise HTTPException(402, {"code": "exam_requires_pro", "message": "Exam-level explanations need Pro."})
     if "notify_prefs" in data:
         data["notify_prefs"] = {**(user.notify_prefs or {}), **data["notify_prefs"]}
+    if data.get("onboarded") and not user.onboarded:
+        telemetry.event("onboarding_completed", user_id=user.id, goal=data.get("goal"), level=data.get("level_default"),
+                        daily_minutes=data.get("daily_minutes"))
     for k, v in data.items():
         setattr(user, k, v)
     db.commit()
@@ -134,6 +137,24 @@ def read_all(user: User = Depends(current_user), db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------- activity & progress
+
+class PageView(BaseModel):
+    path: str = Field(max_length=80, pattern=r"^/[\w/:.-]*$")
+
+
+_last_view: dict[tuple, float] = {}
+
+
+@router.post("/track")
+def track(body: PageView, user: User = Depends(current_user)):
+    """Which screen a learner opened, as a route pattern ("/books/:id/structure"), never its content."""
+    import time
+    key, now_s = (user.id, body.path), time.monotonic()
+    if now_s - _last_view.get(key, 0) > 15:  # a re-render or quick back-and-forth isn't a new visit
+        _last_view[key] = now_s
+        telemetry.event("page_view", user_id=user.id, path=body.path)
+    return {"ok": True}
+
 
 class Activity(BaseModel):
     book_id: str

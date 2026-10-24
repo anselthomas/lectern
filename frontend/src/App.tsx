@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { ApiError, onLimit } from "./api";
+import { api, ApiError, onLimit } from "./api";
+import { hasSession } from "./auth";
 import { Loading, TopNav, UpgradeModal } from "./components";
 import { useMe } from "./state";
 import Landing from "./pages/Landing";
@@ -38,6 +39,12 @@ export default function App() {
   const loc = useLocation();
   useEffect(() => { const off = onLimit(setLimit); return () => { off(); }; }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [loc.pathname]);
+  // Screen-level usage for the admin view: the route shape only, ids replaced, nothing from the page itself.
+  useEffect(() => {
+    if (!hasSession()) return;
+    const path = loc.pathname.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, ":id").slice(0, 80);
+    api("/track", { body: { path } }).catch(() => undefined);
+  }, [loc.pathname]);
   return (
     <>
       <Routes>
