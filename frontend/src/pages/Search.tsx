@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { ErrorBox, PageChip, SourceViewer, Spinner } from "../components";
@@ -15,12 +15,15 @@ export default function Search() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<any>(null);
   const [viewer, setViewer] = useState<{ book: string; page: number } | null>(null);
-  const run = async (e?: FormEvent) => {
-    e?.preventDefault();
-    if (q.trim().length < 2) return;
-    setBusy(true); setErr(null); setParams({ q });
-    try { setRes(await api(`/search?q=${encodeURIComponent(q)}`)); } catch (e) { setErr(e); } finally { setBusy(false); }
+  const search = async (term: string) => {
+    if (term.trim().length < 2) return;
+    setBusy(true); setErr(null);
+    try { setRes(await api(`/search?q=${encodeURIComponent(term)}`)); } catch (e) { setErr(e); } finally { setBusy(false); }
   };
+  const run = (e?: FormEvent) => { e?.preventDefault(); if (q === params.get("q")) search(q); else setParams({ q }); };
+  // The URL is the source of truth, so links like /search?q=... (top bar, back button, shared) run the search.
+  const urlQ = params.get("q") ?? "";
+  useEffect(() => { setQ(urlQ); search(urlQ); }, [urlQ]);
   const total = res ? res.books.length + res.passages.length + res.notes.length + res.cards.length : 0;
   return (
     <div className="page-narrow stack gap-24">
