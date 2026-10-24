@@ -106,9 +106,32 @@ def highlight_lessons() -> None:
     print(f"highlighted {done} lessons")
 
 
+def verify_quizzes() -> None:
+    """One-off: give chapter quizzes written before answer checking the examiner's second read."""
+    from . import content, telemetry
+    from .models import Book, Chapter, Quiz
+
+    with SessionLocal() as db:
+        for quiz in db.query(Quiz).filter_by(kind="chapter").all():
+            ch, book = db.get(Chapter, quiz.chapter_id), db.get(Book, quiz.book_id)
+            text, _ = content.pages_text(db, book.id, ch.pdf_start, ch.pdf_end)
+            before = {q["id"]: q.get("answer_index") for q in quiz.questions}
+            try:
+                with telemetry.scope(user_id=book.user_id, book_id=book.id, chapter_id=ch.id, feature="quiz_check"):
+                    checked, _ = content.verify_mcqs(list(quiz.questions), text)
+            except Exception as e:  # noqa: BLE001 - leave that quiz as it was
+                print(f"chapter {ch.n}: {e}")
+                continue
+            fixed = sum(1 for q in checked if q["type"] == "mcq" and before.get(q["id"]) != q["answer_index"])
+            quiz.questions = checked
+            db.commit()
+            print(f"chapter {ch.n}: {len(before) - len(checked)} dropped, {fixed} answer keys fixed")
+
+
 if __name__ == "__main__":
-    if len(sys.argv) == 2 and sys.argv[1] in ("backfill-usage", "highlight-lessons"):
-        {"backfill-usage": backfill_usage, "highlight-lessons": highlight_lessons}[sys.argv[1]]()
+    commands = {"backfill-usage": backfill_usage, "highlight-lessons": highlight_lessons, "verify-quizzes": verify_quizzes}
+    if len(sys.argv) == 2 and sys.argv[1] in commands:
+        commands[sys.argv[1]]()
         sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[1] == "grant-internal":
         grant_internal(sys.argv[2])

@@ -329,6 +329,50 @@ def build_quiz(db: Session, book: Book, ch: Chapter, sections: list[Section]) ->
         elif not q.get("model_answer"):
             continue
         out.append(q)
+    try:
+        out, u2 = verify_mcqs(out, text)
+        usage.add(u2)
+    except llm.LLMError as e:
+        log.warning("quiz check for chapter %s skipped: %s", ch.id, e)
+    return out, usage
+
+
+VERIFY_SCHEMA = {
+    "type": "object", "required": ["questions"],
+    "properties": {"questions": {"type": "array", "items": {
+        "type": "object", "required": ["n", "correct_index", "explanation"],
+        "properties": {"n": {"type": "integer"},
+                       "correct_index": {"type": "integer", "description": "0-based; -1 if no option or more than one option is right"},
+                       "explanation": {"type": "string"}}}}},
+}
+
+
+def verify_mcqs(questions: list[dict], text: str) -> tuple[list[dict], llm.Usage]:
+    """Second read of each multiple-choice question against the pages: fix a wrong answer key, drop ambiguous ones,
+    and make the explanation agree with the right option."""
+    mcqs = [q for q in questions if q["type"] == "mcq"]
+    if not mcqs:
+        return questions, llm.Usage()
+    listing = "\n\n".join(f"{k + 1}. {q['question']}\n" + "\n".join(f"  {j}) {o}" for j, o in enumerate(q["options"]))
+                          for k, q in enumerate(mcqs))
+    data, usage = llm.call_json(
+        system=SYSTEM_TEACHER, tool_name="check_quiz", schema=VERIFY_SCHEMA, max_tokens=3000, background=True,
+        prompt="Check each multiple-choice question against the pages below as a careful examiner. For each, give the "
+               "0-based index of the one option the pages support, or -1 if none or more than one option is right "
+               "(watch NOT/EXCEPT wording). Then a one-sentence explanation of why that option is right, from the "
+               f"pages.\n\nQuestions:\n{listing}\n\nPages:\n{text}")
+    verdicts = {v.get("n"): v for v in data.get("questions") or []}
+    out = []
+    for q in questions:
+        v = verdicts.get(mcqs.index(q) + 1) if q["type"] == "mcq" else None
+        if v is not None:
+            k = v.get("correct_index")
+            if not isinstance(k, int) or not (0 <= k < len(q["options"])):
+                continue  # the examiner found no single right answer
+            if k != q["answer_index"]:
+                q = {**q, "answer_index": k}
+            q = {**q, "explanation": v.get("explanation") or q.get("explanation")}
+        out.append(q)
     return out, usage
 
 
