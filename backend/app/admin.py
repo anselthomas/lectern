@@ -88,7 +88,7 @@ def highlight_lessons() -> None:
         done = 0
         for lesson in db.query(Lesson).all():
             blocks = lesson.body.get("blocks", [])
-            if any("==" in (b.get("text") or "") for b in blocks):
+            if lesson.body.get("highlighted"):
                 continue
             sec = db.get(Section, lesson.section_id)
             ch = db.get(Chapter, sec.chapter_id)
@@ -96,6 +96,7 @@ def highlight_lessons() -> None:
             try:
                 with telemetry.scope(user_id=book.user_id, book_id=book.id, chapter_id=ch.id, feature="highlights"):
                     lesson.body["blocks"], _ = content.add_highlights(blocks)
+                lesson.body["highlighted"] = True
             except Exception as e:  # noqa: BLE001 - keep going; an unhighlighted lesson still works
                 print(f"lesson {lesson.id}: {e}")
                 continue

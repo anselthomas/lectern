@@ -81,7 +81,9 @@ LESSON_SCHEMA = {
             "type": "object", "required": ["type", "text"],
             "properties": {
                 "type": {"type": "string", "enum": ["para", "heading", "key_term", "example", "formula"]},
-                "text": {"type": "string", "description": "Paragraph text with ==highlighted== key phrases, or the definition for key_term"},
+                "text": {"type": "string", "description": "Paragraph text, or the definition for key_term"},
+                "highlights": {"type": "array", "maxItems": 3, "items": {"type": "string"},
+                               "description": "For para and example: 1-3 short phrases copied exactly from text to highlight"},
                 "term": {"type": "string", "description": "Only for key_term"},
                 "page": {"type": "integer"}}}},
         "quick_checks": {"type": "array", "minItems": 1, "maxItems": 3, "items": {
@@ -172,17 +174,34 @@ HIGHLIGHT = re.compile(r"==([^=\n]+?)==")
 MAX_HIGHLIGHTS, MAX_HIGHLIGHT_WORDS = 3, 12
 
 
-def highlight_blocks(blocks: list[dict]) -> list[dict]:
-    """Keep ==highlighter== marks short and sparse, like a student's, and only in prose.
+def mark_phrases(text: str, phrases: list[str], limit: int = MAX_HIGHLIGHTS) -> tuple[str, int]:
+    """Wrap the first unmarked occurrence of each phrase in ==marks==. Phrases not in the text are skipped."""
+    n = 0
+    for phrase in sorted({p.strip(" .,;:") for p in phrases if isinstance(p, str)}, key=len, reverse=True):
+        if n >= limit or not phrase or len(phrase.split()) > MAX_HIGHLIGHT_WORDS:
+            continue
+        marked = [(m.start(), m.end()) for m in HIGHLIGHT.finditer(text)]
+        for m in re.finditer(rf"(?<![\w*]){re.escape(phrase)}(?![\w*])", text, re.I):
+            if not any(a <= m.start() < b or a < m.end() <= b for a, b in marked):
+                text = f"{text[:m.start()]}=={m.group(0)}=={text[m.end():]}"
+                n += 1
+                break
+    return text, n
 
-    Blocks the model left unmarked (and lessons written before highlights existed) get their
-    first mention of each key term highlighted instead. Safe to run more than once.
+
+def highlight_blocks(blocks: list[dict]) -> list[dict]:
+    """Turn each block's chosen `highlights` into ==marks==, kept short and sparse like a student's, in prose only.
+
+    Blocks with nothing chosen (and lessons written before highlights existed) get the first
+    mention of each key term highlighted instead. Safe to run more than once.
     """
     terms = sorted({b["term"].strip() for b in blocks if b.get("type") == "key_term" and b.get("term")},
                    key=len, reverse=True)
     terms = [t for t in terms if not any(re.search(rf"=={re.escape(t)}==", b.get("text") or "", re.I) for b in blocks)]
     out = []
     for b in blocks:
+        chosen = b.get("highlights") or []
+        b = {k: v for k, v in b.items() if k != "highlights"}
         text = b.get("text") or ""
         if b.get("type") not in ("para", "example"):
             out.append({**b, "text": HIGHLIGHT.sub(r"\1", text)})
@@ -197,13 +216,15 @@ def highlight_blocks(blocks: list[dict]) -> list[dict]:
             kept += 1
             return f"=={phrase}=="
         text = HIGHLIGHT.sub(keep, text)
+        if chosen and kept < MAX_HIGHLIGHTS:
+            text, n = mark_phrases(text, chosen, MAX_HIGHLIGHTS - kept)
+            kept += n
         if not kept:
             for term in list(terms):
                 if kept >= 2:
                     break
-                m = re.search(rf"(?<![\w=*]){re.escape(term)}(?![\w=*])", text, re.I)
-                if m:
-                    text = f"{text[:m.start()]}=={m.group(0)}=={text[m.end():]}"
+                text, n = mark_phrases(text, [term], 1)
+                if n:
                     kept += 1
                     terms.remove(term)  # a term is highlighted once per lesson, where it first comes up
         out.append({**b, "text": text})
@@ -211,28 +232,31 @@ def highlight_blocks(blocks: list[dict]) -> list[dict]:
 
 
 HIGHLIGHT_SCHEMA = {
-    "type": "object", "required": ["texts"],
-    "properties": {"texts": {"type": "array", "items": {"type": "string"}}},
+    "type": "object", "required": ["paragraphs"],
+    "properties": {"paragraphs": {"type": "array", "items": {
+        "type": "object", "required": ["n", "highlights"],
+        "properties": {"n": {"type": "integer"},
+                       "highlights": {"type": "array", "maxItems": 3, "items": {"type": "string"}}}}}},
 }
+HIGHLIGHT_RULES = ("Highlight like a good student with a highlighter pen: pick the 1-3 phrases worth remembering "
+                   "(a key term where it is explained, the central claim, a number or rule to learn). Each highlight "
+                   "is a few words copied exactly from the text, never a whole sentence, never filler.")
 
 
 def add_highlights(blocks: list[dict], background: bool = True) -> tuple[list[dict], llm.Usage | None]:
-    """Mark the key phrases in an already-written lesson. A rewritten block is used only if its words are unchanged."""
+    """Choose highlights for an already-written lesson's paragraphs that have none."""
     idx = [i for i, b in enumerate(blocks) if b.get("type") in ("para", "example") and "==" not in (b.get("text") or "")]
     if not idx:
         return blocks, None
     numbered = "\n".join(f"{k + 1}. {blocks[i]['text']}" for k, i in enumerate(idx))
     data, usage = llm.call_json(
-        system=SYSTEM_TEACHER, tool_name="highlights", schema=HIGHLIGHT_SCHEMA, max_tokens=4000, background=background,
-        prompt="Highlight these lesson paragraphs like a good student with a highlighter pen. Return every paragraph, "
-               "in order, with its words exactly unchanged, wrapping the 1-3 phrases worth remembering (a key term where "
-               "it is explained, the central claim, a number or rule to learn) in ==double equals==. Keep each "
-               "highlight to a few words, never a whole sentence.\n\n" + numbered)
+        system=SYSTEM_TEACHER, tool_name="highlights", schema=HIGHLIGHT_SCHEMA, max_tokens=2000, background=background,
+        prompt=f"For each numbered lesson paragraph below, give its highlights. {HIGHLIGHT_RULES}\n\n{numbered}")
     out = [dict(b) for b in blocks]
-    squash = lambda s: re.sub(r"\s+", " ", HIGHLIGHT.sub(r"\1", s)).strip()
-    for i, new in zip(idx, data.get("texts") or []):
-        if isinstance(new, str) and squash(new) == squash(blocks[i]["text"]):
-            out[i]["text"] = new
+    for p in data.get("paragraphs") or []:
+        k = p.get("n")
+        if isinstance(k, int) and 1 <= k <= len(idx):
+            out[idx[k - 1]]["highlights"] = p.get("highlights") or []
     return highlight_blocks(out), usage
 
 
@@ -245,11 +269,8 @@ def generate_lesson(db: Session, book: Book, ch: Chapter, sec: Section, level: s
         f"Level: {level}. {LEVELS[level]}\n"
         "Teach this section as a short lesson a learner can finish in about 8-15 minutes: 4-10 blocks mixing "
         "paragraphs (2-5 sentences each), 1-3 key_term blocks (term + one-sentence definition), and an example "
-        "or formula where the book has one. Each block cites the page it draws on. Highlight like a good student "
-        "with a highlighter pen: in each para and example block wrap the 1-3 phrases worth remembering (a key "
-        "term where it is explained, the central claim, a number or rule to learn) in ==double equals==, e.g. "
-        "'Enzymes ==lower the activation energy== of a reaction'. Keep each highlight to a few words, never a whole "
-        "sentence, and don't highlight filler. Then write 2 quick-check "
+        "or formula where the book has one. Each block cites the page it draws on. Give every para and example "
+        f"block its highlights. {HIGHLIGHT_RULES} Then write 2 quick-check "
         "multiple-choice questions that test understanding (not recall of wording), with the correct "
         "answer_index (0-based), a one-sentence explanation and the page.\n"
         "Rules: teach in your own words; never copy the book's sentences (a key_term definition may quote at most "
@@ -268,7 +289,7 @@ def generate_lesson(db: Session, book: Book, ch: Chapter, sec: Section, level: s
         if copied_blocks(retry.get("blocks", []), text) < copied_blocks(data.get("blocks", []), text):
             data = retry
     lo, hi = sec.pdf_start, sec.pdf_end
-    data["blocks"] = highlight_blocks(data.get("blocks", []))
+    data["blocks"], data["highlighted"] = highlight_blocks(data.get("blocks", [])), True
     for b in data.get("blocks", []):
         b["page"] = clamp(b.get("page"), lo, hi)
     checks = []

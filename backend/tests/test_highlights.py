@@ -30,12 +30,21 @@ def test_running_twice_changes_nothing():
     assert highlight_blocks(once) == once
 
 
-def test_backfill_keeps_only_unchanged_wording(monkeypatch):
+def test_chosen_phrases_become_marks():
+    blocks = [{"type": "para", "text": "Drugs come from plants and minerals.", "highlights": ["plants and minerals", "not here"]},
+              {"type": "example", "text": "Potency is diluted step by step.", "highlights": ["Diluted step by step."]}]
+    a, b = highlight_blocks(blocks)
+    assert a == {"type": "para", "text": "Drugs come from ==plants and minerals==."}
+    assert b["text"] == "Potency is ==diluted step by step==."
+
+
+def test_backfill_uses_the_models_choices(monkeypatch):
     from app import content
     blocks = [{"type": "para", "text": "Drugs come from plants and minerals."},
+              {"type": "key_term", "term": "Potency", "text": "Strength."},
               {"type": "para", "text": "Potency is diluted step by step."}]
-    reply = {"texts": ["Drugs come from ==plants and minerals==.", "Potency is ==reduced== gradually."]}
+    reply = {"paragraphs": [{"n": 2, "highlights": ["step by step"]}, {"n": 9, "highlights": ["x"]}]}
     monkeypatch.setattr(content.llm, "call_json", lambda **kw: (reply, None))
     out, _ = content.add_highlights(blocks)
-    assert out[0]["text"] == "Drugs come from ==plants and minerals==."
-    assert out[1]["text"] == "Potency is diluted step by step."  # the model changed the words, so it's ignored
+    assert out[0]["text"] == "Drugs come from plants and minerals."
+    assert out[2]["text"] == "Potency is diluted ==step by step==."
