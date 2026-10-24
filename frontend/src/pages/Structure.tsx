@@ -94,7 +94,7 @@ export default function Structure() {
 
   return (
     <div className="page stack gap-24">
-      <nav className="small muted"><Link to="/library">Library</Link> / {book.filename}</nav>
+      <nav className="small muted"><Link to="/library">Library</Link> / {book.title}</nav>
       <div className="row wrap gap-24" style={{ alignItems: "flex-start" }}>
         <aside className="card stack gap-16" style={{ flex: "1 1 300px", maxWidth: 380 }}>
           <div className="stack gap-4"><h3>{book.title}</h3><span className="small muted">{book.pages ? `${book.pages} pages · ` : ""}{(book.bytes / 1048576).toFixed(0)} MB</span></div>
