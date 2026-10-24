@@ -62,7 +62,8 @@ def book_summary(db: Session, user: User, book: Book, with_chapters: bool = Fals
         "embed_status": book.embed_status, "embedded_chunks": book.embedded_chunks, "confirmed": book.confirmed,
         "chapters_total": len(learnable), "chapters_mastered": mastered,
         "progress": round(100 * (sec_done / sec_total), 1) if sec_total else 0,
-        "current_chapter": {"id": str(current.id), "n": current.n, "title": current.title} if current else None,
+        "current_chapter": {"id": str(current.id), "n": current.n, "label": chapter_label(db, current),
+                            "title": current.title} if current else None,
         "created_at": book.created_at.isoformat(),
         "last_opened_at": book.last_opened_at.isoformat() if book.last_opened_at else None,
     }

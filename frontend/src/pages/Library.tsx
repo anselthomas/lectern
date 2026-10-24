@@ -1,7 +1,7 @@
 import { DragEvent, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError, showLimit, uploadToS3 } from "../api";
-import { Cover, ErrorBox, Loading, Spinner } from "../components";
+import { chName, Cover, ErrorBox, Loading, Spinner } from "../components";
 import { useApi, useMe } from "../state";
 
 export function UploadBox({ onDone }: { onDone: (book: any) => void }) {
@@ -102,7 +102,7 @@ export default function Library() {
                 <span className="small muted">{b.pages ? `${b.pages} pages · ` : ""}{b.chapters_total ? `${b.chapters_total} chapters` : b.filename}</span>
                 {b.status === "ready" ? <>
                   <div className="bar ok"><span style={{ width: `${b.progress}%` }} /></div>
-                  <span className="small">{b.current_chapter ? `Chapter ${b.current_chapter.n}: ${b.current_chapter.title}` : "All chapters mastered"}</span>
+                  <span className="small">{b.current_chapter ? chName(b.current_chapter) : "All chapters mastered"}</span>
                 </> : <span><span className={`badge ${cls}`}>{["processing", "queued"].includes(b.status) && <Spinner />}{label}</span></span>}
               </div>
             </Link>

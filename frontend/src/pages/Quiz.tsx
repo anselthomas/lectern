@@ -122,7 +122,7 @@ export default function Quiz() {
       </div>
       <div className="row gap-12 wrap">
         {done.new_cards > 0 && <Link className="btn btn-secondary" to={`/review?book=${quiz.book.id}`}>Review the {done.total - done.correct} misses now</Link>}
-        {done.next_chapter ? <Link className="btn btn-strong" to={`/books/${quiz.book.id}?chapter=${done.next_chapter.id}`}>Start chapter {done.next_chapter.n}</Link>
+        {done.next_chapter ? <Link className="btn btn-strong" to={`/books/${quiz.book.id}?chapter=${done.next_chapter.id}`}>Start {chName(done.next_chapter)}</Link>
           : <Link className="btn btn-strong" to={`/books/${quiz.book.id}/final`}>Go to the final test</Link>}
         <Link className="btn btn-ghost" to={`/chapters/${ch.id}/quiz`} onClick={() => window.location.reload()}>Retake quiz</Link>
       </div>
