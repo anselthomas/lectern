@@ -17,7 +17,7 @@ from ..db import get_db
 from ..limits import check_new_book, usage_row
 from ..models import Book, Chapter, Chunk, Note, Page, Progress, Section, User
 from ..storage import delete_object, drop_local, local_pdf, presign_put
-from .common import label_for, own_book, parse_id
+from .common import chapter_label, chapter_label_n, label_for, own_book, parse_id
 
 router = APIRouter(prefix="/api")
 _doc_lock = threading.Lock()
@@ -34,7 +34,7 @@ def chapter_summary(db: Session, user: User, ch: Chapter) -> dict:
     else:
         state = "not_started"
     return {
-        "id": str(ch.id), "n": ch.n, "title": ch.title, "kind": ch.kind,
+        "id": str(ch.id), "n": ch.n, "label": chapter_label(db, ch), "title": ch.title, "kind": ch.kind,
         "pdf_start": ch.pdf_start, "pdf_end": ch.pdf_end,
         "pages_label": f"{label_for(db, ch.book_id, ch.pdf_start)}–{label_for(db, ch.book_id, ch.pdf_end)}",
         "status": ch.status, "status_detail": ch.status_detail, "check_note": ch.check_note,
@@ -266,7 +266,7 @@ def get_page(book_id: str, n: int, user: User = Depends(current_user), db: Sessi
         raise HTTPException(404, "Page not found")
     ch = next((c for c in book.chapters if c.pdf_start <= n <= c.pdf_end), None)
     return {"pdf_page": n, "label": page.label or str(n), "text": page.text, "pages": book.pages,
-            "chapter": {"n": ch.n, "title": ch.title} if ch else None}
+            "chapter": {"n": ch.n, "label": chapter_label(db, ch), "title": ch.title} if ch else None}
 
 
 @router.get("/books/{book_id}/pages/{n}/image")
@@ -295,7 +295,7 @@ class NoteIn(BaseModel):
 
 def note_out(db, n: Note) -> dict:
     return {"id": str(n.id), "pdf_page": n.pdf_page, "page_label": label_for(db, n.book_id, n.pdf_page),
-            "chapter_n": n.chapter_n, "kind": n.kind, "quote": n.quote, "text": n.text,
+            "chapter_n": n.chapter_n, "chapter_label": chapter_label_n(db, n.book_id, n.chapter_n), "kind": n.kind, "quote": n.quote, "text": n.text,
             "created_at": n.created_at.isoformat()}
 
 

@@ -598,13 +598,15 @@ def tutor_answer(book: Book, excerpts: list[dict], history: list[dict], question
     return data, usage
 
 
-def final_test_questions(pools: list[tuple[Chapter, list[dict], float | None]], n: int = 40) -> list[dict]:
+def final_test_questions(pools: list[tuple[Chapter, list[dict], float | None]], n: int = 40,
+                         labels: dict | None = None) -> list[dict]:
     """Sample a cumulative test from chapter quizzes, weighted toward chapters with low quiz scores."""
     weighted = []
     for ch, questions, best in pools:
         w = 1.5 - (best if best is not None else 0.5)  # 0.5 .. 1.5
+        label = labels.get(ch.n) if labels else None
         for q in questions:
             weighted.append((w * random.random(), {**q, "id": f"c{ch.n}-{q['id']}", "chapter_n": ch.n,
-                                                    "chapter_title": ch.title}))
+                                                    "chapter_label": label, "chapter_title": ch.title}))
     weighted.sort(key=lambda x: -x[0])
     return [q for _, q in weighted[:n]]

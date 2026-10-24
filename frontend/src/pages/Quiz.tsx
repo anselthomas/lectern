@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, trackStudy } from "../api";
-import { ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
+import { chName, chNo, ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
 import { VoiceInput } from "../voice";
 import { useApi } from "../state";
 
@@ -54,7 +54,7 @@ export function QuizRunner({ quiz, bookId, onSubmit, timed, header }: { quiz: an
       <div className="card stack gap-16">
         <div className="row gap-8 wrap"><span className="badge badge-muted">{q.type === "mcq" ? "Multiple choice" : "Short answer"}</span>
           {q.section_title && <span className="small muted">Section {q.section_n} · {q.section_title}</span>}
-          {q.chapter_title && <span className="small muted">Ch. {q.chapter_n} · {q.chapter_title}</span>}</div>
+          {q.chapter_title && <span className="small muted">{chName(q)}</span>}</div>
         <p style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.45 }}>{q.question}</p>
         {q.type === "mcq" ? (
           <div className="stack gap-8" role="radiogroup" aria-label="Answer">
@@ -110,13 +110,13 @@ export default function Quiz() {
     <div className="page-narrow stack gap-24">
       <div className="card stack gap-16" style={{ alignItems: "center", textAlign: "center" }}>
         <span style={{ fontSize: 48, fontWeight: 800 }}>{done.correct}/{done.total}</span>
-        <h2>{done.mastered ? `Chapter ${ch.n} mastered` : "Good effort — review and try again"}</h2>
+        <h2>{done.mastered ? `Chapter ${chNo(ch)} mastered` : "Good effort — review and try again"}</h2>
         <p className="muted">{done.new_cards ? `You missed ${done.total - done.correct} question${done.total - done.correct === 1 ? "" : "s"}. ${done.new_cards === 1 ? "It's" : "They're"} now flashcard${done.new_cards === 1 ? "" : "s"}, scheduled for review.` : done.correct === done.total ? "A perfect score." : "Your misses are already in your review deck."}</p>
       </div>
       <div className="card stack gap-12"><span className="label">By section</span>
         {done.by_section.map((g: any) => (
           <div key={g.section_n} className="row between gap-12" style={{ padding: "8px 0", borderBottom: "1px solid var(--bg-3)" }}>
-            <span>{ch.n}.{g.section_n} {g.title}</span>
+            <span>{chNo(ch)}.{g.section_n} {g.title}</span>
             <span className={`badge ${g.correct === g.total ? "badge-ok" : g.correct / g.total >= 0.5 ? "badge-warn" : "badge-bad"}`}>{g.correct} / {g.total}</span>
           </div>))}
       </div>
@@ -131,7 +131,7 @@ export default function Quiz() {
   return (
     <div className="page-narrow">
       <QuizRunner quiz={quiz} bookId={quiz.book.id}
-        header={<span className="small muted"><Link to={`/books/${quiz.book.id}?chapter=${ch.id}`}>Chapter {ch.n} quiz · {ch.title}</Link></span>}
+        header={<span className="small muted"><Link to={`/books/${quiz.book.id}?chapter=${ch.id}`}>{chName(ch)} · quiz</Link></span>}
         onSubmit={async (answers) => setDone(await api(`/quizzes/${quiz.id}/submit`, { body: { answers } }))} />
     </div>
   );

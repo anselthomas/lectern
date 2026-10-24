@@ -13,7 +13,8 @@ from ..limits import check_feature, check_tutor, record_tokens
 from ..models import (
     Attempt, Book, Card, Chapter, ChatMessage, Chunk, Job, Lesson, Page, Progress, Quiz, Review, Section, User,
 )
-from .common import label_for, own_book, own_chapter, own_section, parse_id, progress_row
+from ..structure import chapter_labels
+from .common import chapter_label, label_for, own_book, own_chapter, own_section, parse_id, progress_row
 
 router = APIRouter(prefix="/api")
 LEVELS = ("simple", "standard", "exam")
@@ -49,7 +50,7 @@ def get_chapter(chapter_id: str, user: User = Depends(current_user), db: Session
                  "done": str(s.id) in done} for s in ch.sections]
     resume = next((s for s in sections if not s["done"]), None)
     return {
-        "id": str(ch.id), "n": ch.n, "title": ch.title, "kind": ch.kind, "status": ch.status,
+        "id": str(ch.id), "n": ch.n, "label": chapter_label(db, ch), "title": ch.title, "kind": ch.kind, "status": ch.status,
         "status_detail": ch.status_detail, "book": {"id": str(book.id), "title": book.title},
         "pages_label": f"{label_for(db, book.id, ch.pdf_start)}–{label_for(db, book.id, ch.pdf_end)}",
         "map": ch.map, "sections": sections, "resume": resume,
@@ -58,7 +59,8 @@ def get_chapter(chapter_id: str, user: User = Depends(current_user), db: Session
                      "sections_done": len(done)},
         "quiz": {"id": str(quiz.id), "count": len(quiz.questions)} if quiz else None,
         "due_cards": due_cards,
-        "next_chapter": {"id": str(nxt.id), "n": nxt.n, "title": nxt.title, "status": nxt.status} if nxt else None,
+        "next_chapter": {"id": str(nxt.id), "n": nxt.n, "label": chapter_label(db, nxt), "title": nxt.title,
+                         "status": nxt.status} if nxt else None,
     }
 
 
@@ -142,7 +144,7 @@ def get_section(section_id: str, level: str | None = None, user: User = Depends(
         "pages_label": f"{label_for(db, book.id, sec.pdf_start)}–{label_for(db, book.id, sec.pdf_end)}",
         "pdf_start": sec.pdf_start, "pdf_end": sec.pdf_end,
         "book": {"id": str(book.id), "title": book.title},
-        "chapter": {"id": str(ch.id), "n": ch.n, "title": ch.title,
+        "chapter": {"id": str(ch.id), "n": ch.n, "label": chapter_label(db, ch), "title": ch.title,
                     "sections": [{"id": str(s.id), "n": s.n, "title": s.title, "done": str(s.id) in done} for s in secs]},
         "prev": {"id": str(secs[i - 1].id), "n": secs[i - 1].n, "title": secs[i - 1].title} if i > 0 else None,
         "next": {"id": str(secs[i + 1].id), "n": secs[i + 1].n, "title": secs[i + 1].title} if i + 1 < len(secs) else None,
@@ -218,7 +220,7 @@ def get_quiz(chapter_id: str, user: User = Depends(current_user), db: Session = 
     if quiz is None:
         raise HTTPException(409, "The quiz is still being prepared")
     titles = {s.n: s.title for s in ch.sections}
-    return {"id": str(quiz.id), "chapter": {"id": str(ch.id), "n": ch.n, "title": ch.title},
+    return {"id": str(quiz.id), "chapter": {"id": str(ch.id), "n": ch.n, "label": chapter_label(db, ch), "title": ch.title},
             "book": {"id": str(book.id), "title": book.title},
             "questions": [{**public_question(q), "section_title": titles.get(q.get("section_n"))} for q in quiz.questions]}
 
@@ -314,12 +316,13 @@ def submit_quiz(quiz_id: str, body: Submit, user: User = Depends(current_user), 
             g["correct"] += r["correct"]
         out.update(mastered=p.mastered, by_section=sorted(groups.values(), key=lambda g: g["section_n"] or 0))
         nxt = next_chapter(book, ch)
-        out["next_chapter"] = {"id": str(nxt.id), "n": nxt.n, "title": nxt.title} if nxt else None
+        out["next_chapter"] = {"id": str(nxt.id), "n": nxt.n, "label": chapter_label(db, nxt), "title": nxt.title} if nxt else None
     else:
-        groups = {}
+        groups, labels = {}, chapter_labels(book.chapters)
         for r in results:
             g = groups.setdefault(r["chapter_n"], {"chapter_n": r["chapter_n"], "title": chapters[r["chapter_n"]].title
-                                                   if r["chapter_n"] in chapters else "", "correct": 0, "total": 0})
+                                                   if r["chapter_n"] in chapters else "", "correct": 0, "total": 0,
+                                                   "chapter_label": labels.get(r["chapter_n"])})
             g["total"] += 1
             g["correct"] += r["correct"]
         out.update(passed=score >= 0.75, by_chapter=sorted(groups.values(), key=lambda g: g["chapter_n"] or 0))
@@ -360,7 +363,7 @@ def final_start(book_id: str, user: User = Depends(current_user), db: Session = 
         if quiz:
             p = db.get(Progress, (user.id, c.id))
             pools.append((c, quiz.questions, p.quiz_best if p else None))
-    questions = content.final_test_questions(pools)
+    questions = content.final_test_questions(pools, labels=chapter_labels(book.chapters))
     if not questions:
         raise HTTPException(409, "No chapter quizzes yet")
     quiz = Quiz(book_id=book.id, kind="final", user_id=user.id, questions=questions)

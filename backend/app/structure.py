@@ -240,6 +240,7 @@ def detect(doc: fitz.Document, texts: list[str], offset: int | None,
         specs = sanitize(specs, n)
         if specs and pdf.outline_usable(specs, n):
             name_bare_titles(specs, texts)
+            specs = refine_with_page_headings(specs, texts)
             try:
                 attach_section_hints(specs, texts, offset)
             except Exception as e:  # hints are a bonus; never fail detection over them
@@ -266,6 +267,52 @@ def name_bare_titles(specs: list[pdf.ChapterSpec], texts: list[str]) -> None:
                 s.title = f"{s.title.strip()} {name}"
                 s.kind = pdf.kind_for(name)
                 break
+
+
+NUMBERED_TITLE = re.compile(r"^(?:chapter|section|part|unit|module|lesson|appendix)\s+(\d+|[A-Z]\b|[IVXLC]+\b)", re.I)
+
+
+def chapter_labels(chapters) -> dict[int, str | None]:
+    """What to call each chapter row: the book's own number ("Chapter 7 ..." -> "7", "Appendix B ..." -> "B"),
+    else its position among the real chapters (or appendices, lettered). Front and back matter get none,
+    so a preface or contents page never shifts the numbering."""
+    out, n_ch, n_app = {}, 0, 0
+    for c in sorted(chapters, key=lambda c: c.n):
+        m = NUMBERED_TITLE.match(c.title.strip())
+        if c.kind == "chapter":
+            n_ch += 1
+            out[c.n] = m.group(1).upper() if m else str(n_ch)
+        elif c.kind == "appendix":
+            n_app += 1
+            out[c.n] = m.group(1).upper() if m else chr(64 + n_app) if n_app <= 26 else str(n_app)
+        else:
+            out[c.n] = None
+    return out
+
+
+APPENDIX_HEAD = re.compile(r"^appendix\b", re.I)
+TRAILING_BACK = re.compile(r"^(index|bibliography|references|works cited)$", re.I)
+
+
+def first_line(text: str) -> str:
+    return next((l.strip() for l in text.splitlines() if l.strip()), "")
+
+
+def refine_with_page_headings(specs: list[pdf.ChapterSpec], texts: list[str]) -> list[pdf.ChapterSpec]:
+    """Use what each chapter's own pages say: "Appendix A ..." on its first page makes it an appendix, and an
+    index or bibliography inside the last chapter (nothing marked where it ends) is split off as back matter."""
+    for s in specs:
+        if s.kind == "chapter" and 0 < s.pdf_start <= len(texts) and APPENDIX_HEAD.match(first_line(texts[s.pdf_start - 1])):
+            s.kind = "appendix"
+    if specs and specs[-1].kind in ("chapter", "appendix"):
+        last = specs[-1]
+        for p in range(last.pdf_start + 1, min(last.pdf_end, len(texts)) + 1):
+            head = first_line(texts[p - 1])
+            if TRAILING_BACK.match(head):
+                specs.append(pdf.ChapterSpec(title=head.title(), pdf_start=p, pdf_end=last.pdf_end, kind="back"))
+                last.pdf_end, last.check_note = p - 1, None
+                break
+    return specs
 
 
 def collapse_short(specs: list[pdf.ChapterSpec], page_count: int) -> list[pdf.ChapterSpec]:

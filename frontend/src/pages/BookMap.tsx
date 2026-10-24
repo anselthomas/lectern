@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import { ErrorBox, Loading, Spinner } from "../components";
+import { chName, chNo, ErrorBox, Loading, Spinner } from "../components";
 import { useApi } from "../state";
 
 const stateBadge: Record<string, [string, string]> = {
@@ -53,7 +53,7 @@ export default function BookMap() {
             return (
               <button key={c.id} onClick={() => setParams({ chapter: c.id })} aria-current={cur ? "true" : undefined}
                 className="row gap-12" style={{ textAlign: "left", padding: "12px 10px", borderRadius: 10, border: 0, cursor: "pointer", background: cur ? "var(--accent-soft)" : "transparent" }}>
-                <span className="mono muted" style={{ width: 22 }}>{c.n}</span>
+                <span className="mono muted" style={{ width: 22 }}>{c.label ?? ""}</span>
                 <span className="grow stack gap-4"><span style={{ fontWeight: cur ? 800 : 600, lineHeight: 1.35 }}>{c.title}</span>
                   <span className="row gap-8"><span className={`badge ${cls}`}>{l}</span>{c.status === "building" && <span className="badge badge-accent"><Spinner />Building</span>}</span></span>
               </button>);
@@ -66,7 +66,7 @@ export default function BookMap() {
           {!ch && !chErr && <div className="card"><Loading /></div>}
           {ch && ch.status !== "ready" && (
             <div className="card stack gap-12">
-              <span className="eyebrow">Chapter {ch.n} map</span><h2>{ch.title}</h2>
+              <span className="eyebrow">Chapter {chNo(ch)} map</span><h2>{ch.title}</h2>
               {ch.status === "failed" ? <>
                 <div className="alert alert-error">We couldn't build this chapter. {ch.status_detail ? "" : ""}Try again — it usually works on a second attempt.</div>
                 <button className="btn btn-primary" onClick={async () => { await api(`/chapters/${ch.id}/build`, { method: "POST" }); reloadCh(); }}>Build again</button>
@@ -76,8 +76,8 @@ export default function BookMap() {
           {ch && ch.status === "ready" && (
             <div className="card stack gap-24">
               <div className="row between wrap gap-16">
-                <div className="stack gap-4"><span className="eyebrow">Chapter {ch.n} map</span><h2>{ch.title}</h2><span className="mono muted">pp. {ch.pages_label}</span></div>
-                <Link className="btn btn-strong" to={startHref}>{ch.progress.mastered ? "Review this chapter" : ch.progress.prequestion ? (ch.resume ? `Resume section ${ch.n}.${ch.resume.n}` : "Continue") : "Start chapter"}</Link>
+                <div className="stack gap-4"><span className="eyebrow">Chapter {chNo(ch)} map</span><h2>{ch.title}</h2><span className="mono muted">pp. {ch.pages_label}</span></div>
+                <Link className="btn btn-strong" to={startHref}>{ch.progress.mastered ? "Review this chapter" : ch.progress.prequestion ? (ch.resume ? `Resume section ${chNo(ch)}.${ch.resume.n}` : "Continue") : "Start chapter"}</Link>
               </div>
               <div className="row gap-24 wrap">
                 <div className="stack gap-4"><span className="label">Difficulty</span><strong>{ch.map?.difficulty}</strong></div>
@@ -91,7 +91,7 @@ export default function BookMap() {
                 {ch.sections.map((s: any) => (
                   <Link key={s.id} to={ch.progress.prequestion ? `/sections/${s.id}` : `/chapters/${ch.id}/start`} className="row gap-12" style={{ padding: "12px 4px", borderBottom: "1px solid var(--bg-3)", textDecoration: "none", color: "inherit" }}>
                     <span className={`ring${s.done ? " done" : ch.resume?.id === s.id ? " cur" : ""}`} />
-                    <span className="grow stack gap-4"><strong>{ch.n}.{s.n} {s.title}</strong>{s.summary && <span className="small muted">{s.summary}</span>}</span>
+                    <span className="grow stack gap-4"><strong>{chNo(ch)}.{s.n} {s.title}</strong>{s.summary && <span className="small muted">{s.summary}</span>}</span>
                     <span className="mono muted">pp. {s.pages_label}</span>
                   </Link>))}
               </div>
@@ -104,7 +104,7 @@ export default function BookMap() {
               </div>
               {ch.due_cards > 0 && <div className="row between card-sm" style={{ borderColor: "var(--warn-soft)", background: "var(--warn-soft)" }}>
                 <span><strong>Needs attention</strong> · {ch.due_cards} card{ch.due_cards === 1 ? "" : "s"} due from this chapter</span><Link to={`/review?book=${bookId}`}>Review →</Link></div>}
-              {ch.next_chapter && <span className="small muted">Next up: Chapter {ch.next_chapter.n}, {ch.next_chapter.title} {ch.next_chapter.status === "ready" ? "(ready)" : ["queued", "building"].includes(ch.next_chapter.status) ? "(being prepared now)" : ""}</span>}
+              {ch.next_chapter && <span className="small muted">Next up: {chName(ch.next_chapter)} {ch.next_chapter.status === "ready" ? "(ready)" : ["queued", "building"].includes(ch.next_chapter.status) ? "(being prepared now)" : ""}</span>}
             </div>
           )}
         </section>

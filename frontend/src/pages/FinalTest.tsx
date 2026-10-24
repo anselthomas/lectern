@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, showLimit } from "../api";
-import { ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
+import { chName, chNo, ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
 import { useApi } from "../state";
 import { QuizRunner } from "./Quiz";
 
@@ -30,7 +30,7 @@ export default function FinalTest() {
         <p className="muted">{done.passed ? `You finished ${book.title}.` : "Your misses are now flashcards. Review them and try again — attempts are unlimited."}</p>
       </div>
       <div className="card stack gap-12"><span className="label">Score by chapter</span>
-        {done.by_chapter.map((g: any) => <div key={g.chapter_n} className="row between" style={{ padding: "8px 0", borderBottom: "1px solid var(--bg-3)" }}><span>Ch. {g.chapter_n} · {g.title}</span><span className="mono">{Math.round((g.correct / g.total) * 100)}%</span></div>)}
+        {done.by_chapter.map((g: any) => <div key={g.chapter_n} className="row between" style={{ padding: "8px 0", borderBottom: "1px solid var(--bg-3)" }}><span>{chName(g)}</span><span className="mono">{Math.round((g.correct / g.total) * 100)}%</span></div>)}
       </div>
       <div className="card stack gap-16"><span className="label">Your answers</span>
         {quiz.questions.map((q: any, k: number) => {
@@ -39,7 +39,7 @@ export default function FinalTest() {
           const given = q.type === "mcq" ? (typeof mine === "number" ? q.options[mine] : null) : mine;
           return (
             <div key={q.id} className="stack gap-8" style={{ paddingBottom: 14, borderBottom: "1px solid var(--bg-3)" }}>
-              <div className="row gap-8 wrap"><span className={`badge ${r?.correct ? "badge-ok" : "badge-warn"}`}>{r?.correct ? "Correct" : given ? "Missed" : "Not answered"}</span><span className="small muted">Q{k + 1} · Ch. {q.chapter_n}</span></div>
+              <div className="row gap-8 wrap"><span className={`badge ${r?.correct ? "badge-ok" : "badge-warn"}`}>{r?.correct ? "Correct" : given ? "Missed" : "Not answered"}</span><span className="small muted">Q{k + 1} · Ch. {chNo(q)}</span></div>
               <strong>{q.question}</strong>
               {given && <span className="small"><span className="muted">You said:</span> {given}</span>}
               {!r?.correct && r?.correct_answer && <span className="small"><span className="muted">Answer:</span> {r.correct_answer}</span>}

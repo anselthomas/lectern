@@ -167,3 +167,25 @@ def test_bare_contents_titles_take_the_page_heading():
     name_bare_titles(specs, ["Section 12\nMiscellaneous", "13-1 Glossary\nAcid: a compound", "4\nChapter 4\n12"])
     assert [s.title for s in specs] == ["Section 12 Miscellaneous", "Section 13 Glossary", "Chapter 4"]
     assert specs[1].kind == "back"
+
+
+def test_page_headings_mark_appendices_and_split_trailing_index():
+    from app.pdf import ChapterSpec
+    from app.structure import refine_with_page_headings
+    texts = ["Chapter 1\nIntro", "more", "Appendix A\nDebugging", "more", "Index\nabs, 52", "zip, 99"]
+    specs = [ChapterSpec(title="Intro", pdf_start=1, pdf_end=2),
+             ChapterSpec(title="Debugging", pdf_start=3, pdf_end=6, check_note="runs to the last page")]
+    out = refine_with_page_headings(specs, texts)
+    assert [(s.title, s.kind, s.pdf_start, s.pdf_end) for s in out] == [
+        ("Intro", "chapter", 1, 2), ("Debugging", "appendix", 3, 4), ("Index", "back", 5, 6)]
+    assert out[1].check_note is None
+
+
+def test_chapter_labels_follow_the_books_numbering():
+    from types import SimpleNamespace as C
+    from app.structure import chapter_labels
+    rows = [C(n=1, kind="front", title="Contents"), C(n=2, kind="chapter", title="Chapter 1 Units"),
+            C(n=3, kind="chapter", title="Vectors"), C(n=4, kind="appendix", title="Appendix A Units"),
+            C(n=5, kind="appendix", title="Debugging"), C(n=6, kind="back", title="Index"),
+            C(n=7, kind="chapter", title="Section 12 Miscellaneous"), C(n=8, kind="chapter", title="Part IV Waves")]
+    assert chapter_labels(rows) == {1: None, 2: "1", 3: "2", 4: "A", 5: "B", 6: None, 7: "12", 8: "IV"}

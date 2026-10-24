@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiError, trackStudy } from "../api";
-import { ErrorBox, Loading, PageChip, plain, Rich, RichBlock, SourceViewer, Spinner, TopNav } from "../components";
+import { chName, chNo, ErrorBox, Loading, PageChip, plain, Rich, RichBlock, SourceViewer, Spinner, TopNav } from "../components";
 import { VoiceInput } from "../voice";
 import { useMe } from "../state";
 
@@ -134,7 +134,7 @@ export default function Lesson() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <div className="lesson-top">
-        <Link to={`/books/${sec.book.id}?chapter=${ch.id}`} className="row gap-8" style={{ color: "var(--muted)", textDecoration: "none", fontWeight: 600, fontSize: 14, padding: "12px 0" }}>← Ch. {ch.n} · {ch.title}</Link>
+        <Link to={`/books/${sec.book.id}?chapter=${ch.id}`} className="row gap-8" style={{ color: "var(--muted)", textDecoration: "none", fontWeight: 600, fontSize: 14, padding: "12px 0" }}>← Ch. {chNo(ch)} · {ch.title}</Link>
         <div className="steps" role="img" aria-label={`Section ${sec.n} of ${ch.sections.length}`} style={{ flex: "1 1 200px", maxWidth: 360 }}>
           {ch.sections.map((s: any, i: number) => <span key={s.id} className={s.done ? "done" : i === doneIdx ? "cur" : ""} />)}
         </div>
@@ -151,7 +151,7 @@ export default function Lesson() {
           <span className="label" style={{ padding: "0 10px 10px" }}>Sections</span>
           {ch.sections.map((s: any) => (
             <Link key={s.id} to={`/sections/${s.id}?level=${level}`} aria-current={s.id === sec.id ? "step" : undefined}>
-              <span className={`ring${s.done ? " done" : s.id === sec.id ? " cur" : ""}`} />{ch.n}.{s.n} {s.title}
+              <span className={`ring${s.done ? " done" : s.id === sec.id ? " cur" : ""}`} />{chNo(ch)}.{s.n} {s.title}
             </Link>))}
           <Link to={`/chapters/${ch.id}/explain`} style={{ marginTop: 8, borderTop: "1px solid var(--bg-3)" }}>✎ Explain it back</Link>
           <Link to={`/chapters/${ch.id}/quiz`}>☑ Chapter quiz</Link>
@@ -159,7 +159,7 @@ export default function Lesson() {
         <main className="lesson-main">
           <article className={highlights ? undefined : "no-hl"}>
             <div className="stack gap-8">
-              <span className="mono muted">Section {ch.n}.{sec.n} · pp. {sec.pages_label}{lesson?.minutes ? ` · ~${lesson.minutes} min` : ""}</span>
+              <span className="mono muted">Section {chNo(ch)}.{sec.n} · pp. {sec.pages_label}{lesson?.minutes ? ` · ~${lesson.minutes} min` : ""}</span>
               <h1>{sec.title}</h1>
             </div>
             {sec.status === "building" && <div className="card row gap-12"><Spinner large /><div className="stack gap-4"><strong>Writing this section at the {level} level</strong><span className="small muted">Usually 20–40 seconds.</span></div></div>}
@@ -183,8 +183,8 @@ export default function Lesson() {
               {lesson.quick_checks.map((q: any, i: number) => <QuickCheck key={`${sec.id}-${level}-${i}`} q={q} i={i} total={lesson.quick_checks.length} onOpen={(p) => open(p)} />)}
             </>}
             <div className="row between wrap gap-12" style={{ paddingTop: 8 }}>
-              {sec.prev ? <Link to={`/sections/${sec.prev.id}?level=${level}`} style={{ fontWeight: 700, padding: "12px 0" }}>← {ch.n}.{sec.prev.n} {sec.prev.title}</Link> : <span />}
-              <button className="btn btn-strong" disabled={busy || !lesson} onClick={finish}>{busy ? <Spinner /> : sec.next ? `Next: ${ch.n}.${sec.next.n} →` : "Next: explain it back →"}</button>
+              {sec.prev ? <Link to={`/sections/${sec.prev.id}?level=${level}`} style={{ fontWeight: 700, padding: "12px 0" }}>← {chNo(ch)}.{sec.prev.n} {sec.prev.title}</Link> : <span />}
+              <button className="btn btn-strong" disabled={busy || !lesson} onClick={finish}>{busy ? <Spinner /> : sec.next ? `Next: ${chNo(ch)}.${sec.next.n} →` : "Next: explain it back →"}</button>
             </div>
           </article>
         </main>

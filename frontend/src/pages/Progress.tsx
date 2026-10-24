@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ErrorBox, formatMinutes, Loading } from "../components";
+import { chName, chNo, ErrorBox, formatMinutes, Loading } from "../components";
 import { useApi } from "../state";
 
 const periods = [[14, "Last 14 days"], [30, "Last 30 days"], [100000, "All time"]] as const;
@@ -46,7 +46,7 @@ export default function Progress() {
         {data.attention.length === 0 ? <span className="muted">Nothing flagged. Missed quiz questions and cards you forget show up here.</span> :
           data.attention.map((a: any) => (
             <div key={a.chapter_id} className="row between gap-12" style={{ padding: "8px 0", borderBottom: "1px solid var(--bg-3)" }}>
-              <span className="stack gap-4"><strong>{a.title}</strong><span className="small muted">{a.book} · Ch. {a.chapter_n}</span></span>
+              <span className="stack gap-4"><strong>{a.title}</strong><span className="small muted">{a.book} · Ch. {chNo(a)}</span></span>
               <Link to={`/review?book=${a.book_id}`}>{a.cards} card{a.cards === 1 ? "" : "s"} →</Link>
             </div>))}
       </div>

@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from ..models import Book, Chapter, Progress, Section, User
+from ..structure import chapter_labels
 
 
 def parse_id(value: str) -> uuid.UUID:
@@ -42,6 +43,18 @@ def progress_row(db: Session, user: User, ch: Chapter) -> Progress:
         db.add(p)
         db.flush()
     return p
+
+
+def chapter_label(db: Session, ch: Chapter | None) -> str | None:
+    """The chapter's number as the book shows it (see structure.chapter_labels)."""
+    if ch is None:
+        return None
+    return chapter_labels(db.query(Chapter).filter_by(book_id=ch.book_id).all()).get(ch.n)
+
+
+def chapter_label_n(db: Session, book_id, n: int | None) -> str | None:
+    ch = db.query(Chapter).filter_by(book_id=book_id, n=n).first() if n is not None else None
+    return chapter_label(db, ch)
 
 
 def label_for(db: Session, book_id, pdf_page: int | None) -> str | None:

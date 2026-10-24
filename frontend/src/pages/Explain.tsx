@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, trackStudy } from "../api";
-import { ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
+import { chName, chNo, ErrorBox, Loading, PageChip, SourceViewer, Spinner } from "../components";
 import { VoiceInput } from "../voice";
 import { useApi } from "../state";
 
@@ -25,7 +25,7 @@ export default function Explain() {
   const verdictCls = fb?.verdict === "Good explanation" ? "badge-ok" : fb?.verdict === "Getting there" ? "badge-warn" : "badge-bad";
   return (
     <div className="page-narrow stack gap-24">
-      <span className="small muted"><Link to={`/books/${ch.book.id}?chapter=${ch.id}`}>Chapter {ch.n} · {ch.title}</Link> · Step 4 of 8 · Explain it back</span>
+      <span className="small muted"><Link to={`/books/${ch.book.id}?chapter=${ch.id}`}>{chName(ch)}</Link> · Step 4 of 8 · Explain it back</span>
       <div className="stack gap-12">
         <h1>Explain it back</h1>
         <p className="reading">{ch.map?.explain?.prompt ?? "Explain the main idea of this chapter as if to a friend who missed class."}</p>

@@ -19,7 +19,7 @@ from ..models import (
     Attempt, Book, Card, Chapter, ChatMessage, Chunk, Note, Notification, Progress, Quiz, Review, StudyDay, User,
 )
 from ..storage import delete_object, drop_local
-from .common import label_for, own_book
+from .common import chapter_label, label_for, own_book
 
 router = APIRouter(prefix="/api")
 
@@ -200,7 +200,7 @@ def progress(days: int = 14, user: User = Depends(current_user), db: Session = D
         if ch:
             b = db.get(Book, ch.book_id)
             attention.append({"chapter_id": str(ch.id), "title": ch.title, "book": b.title, "chapter_n": ch.n,
-                              "book_id": str(b.id), "cards": n})
+                              "chapter_label": chapter_label(db, ch), "book_id": str(b.id), "cards": n})
     return {
         "minutes_total": round(sum(per_day.values() or [0]) / 60) if per_day else 0,
         "streak": streak(db, user), "cards_reviewed": reviewed,

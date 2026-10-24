@@ -188,7 +188,7 @@ export function SourceViewer({ bookId, page, onClose, quote }: { bookId: string;
           {img && <img src={img} alt={`Page ${meta?.label ?? n} of the book`} className="page-img" style={{ width: `${zoom}%`, maxWidth: "none" }} />}
         </div>
         <aside style={{ flex: "1 1 240px", padding: 20 }} className="stack gap-16">
-          {meta?.chapter && <div><div className="label">Chapter</div><div style={{ fontWeight: 700 }}>{meta.chapter.n}. {meta.chapter.title}</div></div>}
+          {meta?.chapter && <div><div className="label">Chapter</div><div style={{ fontWeight: 700 }}>{chName(meta.chapter)}</div></div>}
           {quote && <div><div className="label">Cited from</div><p className="reading" style={{ fontSize: 15 }}>“{quote}”</p></div>}
           {saved && <div className="alert alert-ok" role="status">{saved}</div>}
           <button className="btn btn-sm btn-primary" onClick={() => save("highlight")}>Save page to notes</button>
@@ -203,6 +203,13 @@ export function Toast({ text, onDone }: { text: string; onDone: () => void }) {
   useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, [onDone]);
   return <div className="toast" role="status">{text}</div>;
 }
+
+/** A chapter's number as the book shows it ("1", "B"); the server sends it as `label` (or `chapter_label`). */
+export const chNo = (c: any) => c?.label ?? c?.chapter_label ?? c?.chapter_n ?? c?.n;
+const NUMBERED_TITLE = /^(chapter|section|part|unit|module|lesson|appendix)\s+\S+/i;
+/** "Chapter 2 · Vectors", or just the title when it already carries the number ("Chapter 2 Vectors"). */
+export const chName = (c: any, title: string = c?.title ?? c?.chapter_title ?? "") =>
+  NUMBERED_TITLE.test(title) ? title : chNo(c) ? `Chapter ${chNo(c)} · ${title}` : title;
 
 /** Model text without its ==highlight== and **bold** markers, e.g. for quoting against the page. */
 export const plain = (text: string) => text.replace(/==([^=\n]+?)==/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1");

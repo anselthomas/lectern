@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, download } from "../api";
-import { ErrorBox, Loading, PageChip, SourceViewer } from "../components";
+import { chName, chNo, ErrorBox, Loading, PageChip, SourceViewer } from "../components";
 import { VoiceInput } from "../voice";
 import { useApi } from "../state";
 
@@ -33,7 +33,7 @@ export default function Notes() {
       <nav className="small muted"><Link to={`/books/${bookId}`}>{book.title}</Link> / Notes</nav>
       <div className="row between wrap gap-12"><h1>Notes</h1>
         <div className="row gap-8 wrap"><select className="select" style={{ height: 40, width: 200, maxWidth: "100%" }} aria-label="Chapter" value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="all">All chapters</option>{chapters.map((c: any) => <option key={c.id} value={c.n}>Ch. {c.n}: {c.title.slice(0, 40)}</option>)}</select>
+          <option value="all">All chapters</option>{chapters.map((c: any) => <option key={c.id} value={c.n}>{chName(c).slice(0, 48)}</option>)}</select>
           <button className="btn btn-sm btn-secondary" onClick={exportMd} disabled={!notes.length}>Export</button>
           <button className="btn btn-sm btn-secondary" onClick={() => download("/me/cards.csv", "lectern-flashcards.csv")}>Flashcards CSV</button></div>
       </div>
@@ -48,7 +48,7 @@ export default function Notes() {
       {shown.length === 0 ? <div className="card empty"><h3>No notes yet</h3><span className="muted">Save pages from the source viewer, or add a note above.</span></div> :
         <div className="stack gap-12">{shown.map((n) => (
           <div key={n.id} className="card-sm stack gap-8">
-            <div className="row between gap-8"><span className="row gap-8"><span className={`badge ${n.kind === "highlight" ? "badge-warn" : "badge-accent"}`}>{n.kind === "highlight" ? "Highlight" : "Note"}</span>{n.chapter_n && <span className="small muted">Ch. {n.chapter_n}</span>}<PageChip page={n.pdf_page} label={n.page_label} onOpen={setViewer} /></span>
+            <div className="row between gap-8"><span className="row gap-8"><span className={`badge ${n.kind === "highlight" ? "badge-warn" : "badge-accent"}`}>{n.kind === "highlight" ? "Highlight" : "Note"}</span>{n.chapter_n && <span className="small muted">Ch. {chNo(n)}</span>}<PageChip page={n.pdf_page} label={n.page_label} onOpen={setViewer} /></span>
               {confirming === n.id ? <span className="row gap-8 small"><span className="muted">Delete?</span>
                 <button className="link-btn small" style={{ color: "var(--bad)" }} onClick={async () => { await api(`/notes/${n.id}`, { method: "DELETE" }); setConfirming(null); reload(true); }}>Yes, delete</button>
                 <button className="link-btn small" onClick={() => setConfirming(null)}>Keep</button></span>

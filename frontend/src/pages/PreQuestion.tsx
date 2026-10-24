@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
-import { ErrorBox, Loading, Spinner } from "../components";
+import { chName, chNo, ErrorBox, Loading, Spinner } from "../components";
 import { VoiceInput } from "../voice";
 import { useApi } from "../state";
 
@@ -22,7 +22,7 @@ export default function PreQuestion() {
   const [err, setErr] = useState<any>(null);
   if (error) return <div className="page-narrow"><ErrorBox error={error} /></div>;
   if (!ch) return <Loading />;
-  if (ch.status !== "ready") return <div className="page-narrow stack gap-16"><h2>Chapter {ch.n} is still being prepared</h2><Link to={`/books/${ch.book.id}?chapter=${ch.id}`}>Back to the chapter map</Link></div>;
+  if (ch.status !== "ready") return <div className="page-narrow stack gap-16"><h2>{chName(ch)} is still being prepared</h2><Link to={`/books/${ch.book.id}?chapter=${ch.id}`}>Back to the chapter map</Link></div>;
   const first = ch.resume ?? ch.sections[0];
   const go = async () => {
     setBusy(true); setErr(null);
@@ -34,7 +34,7 @@ export default function PreQuestion() {
   return (
     <div className="page-narrow stack gap-24">
       <div className="stack gap-8">
-        <span className="small muted"><Link to={`/books/${ch.book.id}?chapter=${ch.id}`}>Chapter {ch.n} · {ch.title}</Link> · Step 2 of 8 · Pre-question</span>
+        <span className="small muted"><Link to={`/books/${ch.book.id}?chapter=${ch.id}`}>{chName(ch)}</Link> · Step 2 of 8 · Pre-question</span>
         <h1>Before you start</h1>
         <p className="reading">What do you already know about <strong>{ch.title.replace(/^Chapter \d+\s*/i, "")}</strong>? There's no wrong answer. This sets your starting point so we don't over-explain or skip too fast.</p>
       </div>
@@ -59,7 +59,7 @@ export default function PreQuestion() {
       )}
       <div className="row between wrap gap-12">
         <Link to={`/sections/${first.id}`} className="btn btn-ghost" onClick={async (e) => { if (!plan) { e.preventDefault(); setBusy(true); await api(`/chapters/${chapterId}/prequestion`, { body: { rating: "some", answer: "" } }).catch(() => undefined); nav(`/sections/${first.id}`); } }}>Skip</Link>
-        {plan ? <Link className="btn btn-strong" to={`/sections/${first.id}?level=${plan.level}`}>Start section {ch.n}.{first.n} →</Link>
+        {plan ? <Link className="btn btn-strong" to={`/sections/${first.id}?level=${plan.level}`}>Start section {chNo(ch)}.{first.n} →</Link>
           : <button className="btn btn-strong" disabled={!rating || busy} onClick={go}>{busy ? <Spinner /> : "Get my plan"}</button>}
       </div>
     </div>
