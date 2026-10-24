@@ -95,17 +95,20 @@ def rejoin_split_words(texts: list[str], words: set[str] | None = None) -> list[
     neither half is a word at all. Words come from an English list plus the document's own vocabulary."""
     words = english_words() if words is None else words
     seen = Counter(w.lower() for t in texts for w in re.findall(r"[A-Za-z]{2,}", t))
+    # Stems of the document's own longer words, so a technical term missing from the word list still counts
+    # ("decrement" from "decremental").
+    stems = {w[:k] for w in seen if len(w) >= 8 for k in range(6, len(w))}
 
-    def known(w: str) -> bool:
+    def known(w: str, whole: bool = False) -> bool:
         w = w.lower()
         if len(w) == 1:
             return w in ("a", "i")
-        return w in words or seen[w] >= 2
+        return w in words or seen[w] >= 2 or (whole and w in stems)
 
     def fix(m: re.Match) -> str:
         a, b = m.group(1), m.group(2)
         whole, a_ok, b_ok = a + b, known(a), known(b)
-        if (known(whole) and not (a_ok and b_ok)) or (not a_ok and not b_ok):
+        if (known(whole, whole=True) and not (a_ok and b_ok)) or (not a_ok and not b_ok):
             return whole
         return m.group(0)
     return [LINE_SPLIT.sub(fix, t) for t in texts]

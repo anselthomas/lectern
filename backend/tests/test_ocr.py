@@ -64,3 +64,9 @@ def test_split_words_are_rejoined_but_real_line_breaks_stay():
     assert "specified response" in out[1] and "stimulus strength" in out[1]
     assert "particular neuron" in out[2] and "adequate stimulus" in out[2]
     assert "pain\n or proprioception" in out[3] and "receptor\npotential" in out[3]
+
+
+def test_technical_words_join_using_the_documents_own_longer_forms():
+    pages = ["Usually local and decremental.", "Propagates along the nerve fibre without dec\nrement"]
+    out = pdf.rejoin_split_words(pages, {"dec", "without", "the", "nerve", "fibre", "along", "and", "local"})
+    assert "without decrement" in out[1]
