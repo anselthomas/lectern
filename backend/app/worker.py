@@ -99,6 +99,10 @@ def ingest_book(book_id: str) -> None:
                 batch = []
         if batch:
             db.execute(insert(Page), batch)
+        if pdf.junk_title(book.title) or book.title == "Untitled book":
+            # No usable title in the PDF or its file name (e.g. a phone's "Inbound4283..."): use its first heading.
+            heading = next((h for h in (pdf.heading_title(t) for t in texts[:3]) if h and not pdf.junk_title(h)), None)
+            book.title = heading or "Untitled book"
 
         offset = pdf.detect_offset(labels, texts)
         book.page_offset = offset

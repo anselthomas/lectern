@@ -189,3 +189,13 @@ def test_chapter_labels_follow_the_books_numbering():
             C(n=5, kind="appendix", title="Debugging"), C(n=6, kind="back", title="Index"),
             C(n=7, kind="chapter", title="Section 12 Miscellaneous"), C(n=8, kind="chapter", title="Part IV Waves")]
     assert chapter_labels(rows) == {1: None, 2: "1", 3: "2", 4: "A", 5: "B", 6: None, 7: "12", 8: "IV"}
+
+
+def test_machine_made_file_names_are_not_titles():
+    from app.pdf import junk_title, title_from_filename
+    for name in ["Inbound4283829095700509506", "IMG_20241003_101500", "scan0001", "document (3)", "Download",
+                 "WhatsApp", "3f9c2a7e-1b4d-4e8f-9a6c-2d7e1f0b5c3a"]:
+        assert junk_title(name), name
+        assert title_from_filename(name + ".pdf") == "Untitled book", name
+    for name in ["Think Python 2e", "Principles of Economics 3e", "Document Design Basics", "Scanning Electron Microscopy"]:
+        assert not junk_title(name), name

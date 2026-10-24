@@ -15,8 +15,16 @@ JUNK_TITLE = re.compile(
     re.I)
 
 
+# Names a phone or scanner makes up, not a person: "Inbound4283829095700509506" (Android share), "IMG_20241003",
+# "scan0001", "document (3)", "download", or long runs of digits / hex.
+MACHINE_NAME = re.compile(
+    r"^((inbound|img|image|scan(ned)?|document|doc|download|file|tmp|temp|attachment|whatsapp|pdf|print|output)"
+    r"[\s_\-()]*[\d\s_\-()]*|.*\d{8,}.*|[0-9a-f\-]{16,})$", re.I)
+
+
 def junk_title(title: str) -> bool:
-    return not title.strip() or bool(JUNK_TITLE.search(title.strip()))
+    t = title.strip()
+    return not t or bool(JUNK_TITLE.search(t)) or bool(MACHINE_NAME.match(t))
 
 
 @dataclass
@@ -234,5 +242,7 @@ def title_from_filename(filename: str) -> str:
     """'principles-economics_3e.pdf' -> 'Principles Economics 3e'."""
     import os
     stem = os.path.splitext(os.path.basename(filename or ""))[0]
+    if MACHINE_NAME.match(stem.strip()):
+        return "Untitled book"  # named from the document's own heading once it has been read
     words = stem.replace("_", " ").replace("-", " ").split()
     return " ".join(w if w.isupper() else w.capitalize() for w in words)[:300] or "Untitled book"
