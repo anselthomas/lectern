@@ -31,8 +31,26 @@ def test_review_matter_and_one_page_intro_fold_in():
     assert secs[0]["pdf_start"] == 17 and secs[-1]["pdf_end"] == 52
 
 
-def test_too_few_or_too_many_hints_fall_back_to_model():
+def test_too_few_hints_fall_back_to_model():
     assert sections_from_hints(chapter(1, 40, [{"title": "Only one", "pdf_page": 1}]), []) is None
-    many = [{"title": f"Part {i}", "pdf_page": 1 + i * 3} for i in range(12)]
-    assert sections_from_hints(chapter(1, 40, many), []) is None
     assert sections_from_hints(chapter(1, 40, [{"title": "Out of range", "pdf_page": 90}, {"title": "x", "pdf_page": 95}]), []) is None
+
+
+def test_short_subsections_group_into_lessons_without_losing_titles():
+    # Think Python ch. 1: seven subsections in eight pages, several sharing a page.
+    hints = [("What is a program?", 23), ("Running Python", 24), ("The first program", 25), ("Arithmetic operators", 25),
+             ("Values and types", 26), ("Formal and natural languages", 27), ("Debugging", 29), ("Glossary", 29),
+             ("Exercises", 30)]
+    ch = chapter(23, 30, [{"title": t, "pdf_page": p} for t, p in hints])
+    secs = normalise_sections(sections_from_hints(ch, []), 23, 30)
+    assert [(s["title"], s["pdf_start"], s["pdf_end"]) for s in secs] == [
+        ("What is a program? · Running Python", 23, 24),
+        ("The first program · Arithmetic operators · Values and types", 25, 26),
+        ("Formal and natural languages", 27, 28), ("Debugging", 29, 30)]
+
+
+def test_many_subsections_cap_the_number_of_lessons():
+    many = [{"title": f"Part {i}", "pdf_page": 1 + i * 3} for i in range(12)]
+    secs = sections_from_hints(chapter(1, 40, many), [])
+    assert 2 <= len(secs) <= 8
+    assert all(f"Part {i}" in " ".join(s["title"] for s in secs) for i in range(12))

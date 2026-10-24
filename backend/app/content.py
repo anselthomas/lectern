@@ -418,36 +418,57 @@ REVIEW_MATTER = re.compile(
     r"references|further reading|bibliography)\b", re.I)
 
 
+MAX_LESSONS = 8
+GENERIC_OPENER = re.compile(r"^(introduction|overview|preview|learning objectives)$", re.I)
+
+
+def group_hints(hints: list[dict], start: int, end: int) -> list[list[dict]]:
+    """Consecutive subsections grouped into lessons of at least `span` pages, growing the span until a chapter
+    has at most MAX_LESSONS lessons. Several subsections on one or two pages become one lesson, never lost."""
+    for span in range(2, max(3, end - start + 2)):
+        groups: list[list[dict]] = []
+        for h in hints:
+            if groups and h["pdf_page"] - groups[-1][0]["pdf_page"] < span:
+                groups[-1].append(h)
+            else:
+                groups.append([h])
+        # A short tail (e.g. a last subsection on the final page) joins the lesson before it.
+        if len(groups) > 1 and end - groups[-1][0]["pdf_page"] + 1 < span:
+            groups[-2].extend(groups.pop())
+        if len(groups) <= MAX_LESSONS:
+            return groups
+    return [hints]
+
+
 def sections_from_hints(ch: Chapter, model_sections: list[dict]) -> list[dict] | None:
     """When the book itself marks the subdivisions (bookmarks or contents lines), use them as the sections:
-    exact titles and start pages. End-of-chapter review material is folded into the section before it.
-    The model's sections only contribute summaries. Returns None to fall back to the model's split."""
-    hints = sorted({h["pdf_page"]: h for h in (ch.outline_children or [])
-                    if isinstance(h.get("pdf_page"), int) and ch.pdf_start <= h["pdf_page"] <= ch.pdf_end}.values(),
-                   key=lambda h: h["pdf_page"])
-    hints = [h for h in hints if not REVIEW_MATTER.match(h["title"])]
-    if not 2 <= len(hints) <= 10:
+    exact titles and start pages, short neighbours grouped into one lesson. End-of-chapter review material is
+    folded into the section before it. The model's sections only contribute summaries. Returns None to fall
+    back to the model's split."""
+    seen, hints = set(), []
+    for h in sorted((h for h in (ch.outline_children or []) if isinstance(h.get("pdf_page"), int)
+                     and ch.pdf_start <= h["pdf_page"] <= ch.pdf_end), key=lambda h: h["pdf_page"]):
+        title = re.sub(r"^\s*\d+[-.]\d+\s*", "", h.get("title") or "").strip() or h.get("title") or ""
+        if title and not REVIEW_MATTER.match(title) and title.lower() not in seen:
+            seen.add(title.lower())
+            hints.append({"title": title, "pdf_page": h["pdf_page"]})
+    if len(hints) < 2:
         return None
 
     def words(t: str) -> set[str]:
         return {w for w in re.findall(r"[a-z]{4,}", t.lower())}
 
     out = []
-    for h in hints:
-        best = max(model_sections, key=lambda s: len(words(s.get("title", "")) & words(h["title"])), default=None)
-        summary = best.get("summary", "") if best and words(best.get("title", "")) & words(h["title"]) else ""
-        title = re.sub(r"^\s*\d+[-.]\d+\s*", "", h["title"]).strip() or h["title"]
-        out.append({"title": title, "pdf_start": h["pdf_page"], "pdf_end": h["pdf_page"], "summary": summary})
+    for group in group_hints(hints, ch.pdf_start, ch.pdf_end):
+        # A generic opener ("Introduction") grouped with real subsections adds nothing to the lesson's name.
+        titles = [h["title"] for h in group if not (len(group) > 1 and GENERIC_OPENER.match(h["title"]))]
+        title = " · ".join(titles) if len(" · ".join(titles)) <= 120 else f"{titles[0]} · {titles[1]} and more"
+        best = max(model_sections, key=lambda s: len(words(s.get("title", "")) & words(title)), default=None)
+        summary = best.get("summary", "") if best and words(best.get("title", "")) & words(title) else ""
+        out.append({"title": title[:300], "pdf_start": group[0]["pdf_page"], "pdf_end": group[0]["pdf_page"],
+                    "summary": summary})
     out[0]["pdf_start"] = ch.pdf_start  # the chapter opener belongs to the first section
-    # A one-page "Introduction" isn't worth its own lesson: let the next section absorb it.
-    merged = []
-    for i, s in enumerate(out):
-        nxt = out[i + 1] if i + 1 < len(out) else None
-        if nxt and nxt["pdf_start"] - s["pdf_start"] < 2:
-            nxt["pdf_start"] = s["pdf_start"]
-            continue
-        merged.append(s)
-    return merged if len(merged) >= 2 else None
+    return out if len(out) >= 2 else None
 
 
 def build_chapter(db: Session, book: Book, ch: Chapter, level: str) -> llm.Usage:
