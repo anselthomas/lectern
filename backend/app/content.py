@@ -342,44 +342,72 @@ def build_quiz(db: Session, book: Book, ch: Chapter, sections: list[Section]) ->
 VERIFY_SCHEMA = {
     "type": "object", "required": ["questions"],
     "properties": {"questions": {"type": "array", "items": {
-        "type": "object", "required": ["n", "correct_option", "explanation"],
+        "type": "object", "required": ["n", "working", "correct_option", "confident", "explanation"],
         "properties": {"n": {"type": "integer"},
+                       "working": {"type": "string", "description": "Work it out first: what the pages say, any arithmetic step by step"},
                        "correct_option": {"type": "string", "description": "The right option's text, copied exactly; NONE if no single option is right"},
+                       "confident": {"type": "boolean", "description": "false if the pages don't clearly settle it or the options look flawed"},
                        "explanation": {"type": "string"}}}}},
 }
+EXAMINER = ("Check each multiple-choice question against the pages below as a careful examiner. For each, first work it "
+            "out (quote what the pages say; do any arithmetic step by step), then give the text of the one option that "
+            "is right, copied exactly, or NONE if no option or more than one option is right (watch NOT/EXCEPT wording). "
+            "Say whether you are confident, then give a one-sentence explanation that agrees with your answer.")
 
 
 def _norm_option(s) -> str:
     return re.sub(r"\W+", " ", str(s or "")).strip().lower()
 
 
-def verify_mcqs(questions: list[dict], text: str) -> tuple[list[dict], llm.Usage]:
-    """Second read of each multiple-choice question against the pages: fix a wrong answer key, drop ambiguous ones,
-    and make the explanation agree with the right option."""
-    mcqs = [q for q in questions if q["type"] == "mcq"]
-    if not mcqs:
-        return questions, llm.Usage()
+def _examine(mcqs: list[dict], text: str, usage: llm.Usage) -> dict[int, tuple[int | None, str]]:
+    """{position: (chosen option index, or None when unsure or unmatched; explanation)}"""
     listing = "\n\n".join(f"{k + 1}. {q['question']}\n" + "\n".join(f"  - {o}" for o in q["options"])
                           for k, q in enumerate(mcqs))
-    data, usage = llm.call_json(
-        system=SYSTEM_TEACHER, tool_name="check_quiz", schema=VERIFY_SCHEMA, max_tokens=3000, background=True,
-        prompt="Check each multiple-choice question against the pages below as a careful examiner. For each, give the "
-               "text of the one option the pages support, copied exactly, or NONE if no option or more than one "
-               "option is right (watch NOT/EXCEPT wording). Then a one-sentence explanation of why that option is right, from the "
-               f"pages.\n\nQuestions:\n{listing}\n\nPages:\n{text}")
-    verdicts = {v.get("n"): v for v in data.get("questions") or []}
+    data, u = llm.call_json(system=SYSTEM_TEACHER, tool_name="check_quiz", schema=VERIFY_SCHEMA, max_tokens=6000,
+                            background=True, prompt=f"{EXAMINER}\n\nQuestions:\n{listing}\n\nPages:\n{text}")
+    usage.add(u)
+    out = {}
+    for v in data.get("questions") or []:
+        k = v.get("n")
+        if not isinstance(k, int) or not 1 <= k <= len(mcqs):
+            continue
+        matches = [j for j, o in enumerate(mcqs[k - 1]["options"]) if _norm_option(o) == _norm_option(v.get("correct_option"))]
+        pick = matches[0] if len(matches) == 1 and v.get("confident") is not False else None
+        out[k - 1] = (pick, v.get("explanation") or "")
+    return out
+
+
+def verify_mcqs(questions: list[dict], text: str) -> tuple[list[dict], llm.Usage]:
+    """Independent examiner reads of each multiple-choice question against the pages. A question is kept when
+    the examiner agrees with its answer key; when they disagree a second examiner breaks the tie, and the key
+    is whatever two of the three agree on. Questions nobody can settle are dropped."""
+    usage = llm.Usage()
+    mcqs = [q for q in questions if q["type"] == "mcq"]
+    if not mcqs:
+        return questions, usage
+    first = _examine(mcqs, text, usage)
+    disputed = [i for i, (pick, _) in first.items() if pick is not None and pick != mcqs[i]["answer_index"]]
+    second = {}
+    if disputed:
+        tie = _examine([mcqs[i] for i in disputed], text, usage)
+        second = {disputed[j]: v for j, v in tie.items()}
+    verdict: dict[int, tuple[int, str] | None] = {}
+    for i, (pick, why) in first.items():
+        if pick is None:
+            verdict[i] = None
+        elif pick == mcqs[i]["answer_index"]:
+            verdict[i] = (pick, why)
+        else:
+            pick2, why2 = second.get(i, (None, ""))
+            verdict[i] = (pick2, why2) if pick2 in (pick, mcqs[i]["answer_index"]) else None
     out = []
     for q in questions:
-        v = verdicts.get(mcqs.index(q) + 1) if q["type"] == "mcq" else None
-        if v is not None:
-            pick = _norm_option(v.get("correct_option"))
-            matches = [j for j, o in enumerate(q["options"]) if _norm_option(o) == pick]
-            if len(matches) != 1:
-                continue  # the examiner found no single right answer
-            k = matches[0]
-            if k != q["answer_index"]:
-                q = {**q, "answer_index": k}
-            q = {**q, "explanation": v.get("explanation") or q.get("explanation")}
+        i = mcqs.index(q) if q["type"] == "mcq" else None
+        if i is not None and i in verdict:
+            if verdict[i] is None:
+                continue  # no two readings agree on a single right answer
+            k, why = verdict[i]
+            q = {**q, "answer_index": k, "explanation": why or q.get("explanation")}
         out.append(q)
     return out, usage
 
