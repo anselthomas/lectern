@@ -218,3 +218,12 @@ def test_a_bookmark_per_slide_is_not_a_chapter_outline():
     assert not outline_usable(per_slide, 48)
     chapters = [ChapterSpec(title=f"Chapter {i}", pdf_start=1 + 10 * (i - 1), pdf_end=10 * i) for i in range(1, 15)]
     assert outline_usable(chapters, 140)
+
+
+def test_wrapped_heading_titles_are_joined():
+    from app.pdf import chapters_from_headings
+    body = "Sensory receptors convert stimulus energy. " * 20
+    texts = [f"Chapter 1: Receptors and\nTransduction\n{body}", body,
+             f"Chapter 2: Adaptation\n{body}", body, f"Chapter 3: Clinical\n{body}"]
+    assert [s.title for s in chapters_from_headings(texts)] == [
+        "Chapter 1: Receptors and Transduction", "Chapter 2: Adaptation", "Chapter 3: Clinical"]

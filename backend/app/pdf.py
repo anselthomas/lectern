@@ -264,6 +264,7 @@ CHAPTER_HEAD = re.compile(r"^\s*(chapter|unit|lesson|part)\s*[-:.]?\s*(\d+|[ivxl
 
 
 TOC_LINE = re.compile(r"(\.{3,}|\s{2,}|\t)\s*\d{1,4}\s*$")
+WRAPPED = re.compile(r"(\b(and|or|of|the|a|an|in|on|to|for|with|from|by|&)|[,:\-–])$", re.I)
 
 
 def chapters_from_headings(texts: list[str]) -> list[ChapterSpec]:
@@ -279,7 +280,10 @@ def chapters_from_headings(texts: list[str]) -> list[ChapterSpec]:
             continue  # a contents page
         top = [(k, m) for k, m in heads if k < 3]
         for k, m in (top or heads)[:1]:
-            rest = m.group(3).strip() or (all_lines[k + 1] if k + 1 < len(all_lines) and len(all_lines[k + 1]) <= 90 else "")
+            nxt = all_lines[k + 1] if k + 1 < len(all_lines) and len(all_lines[k + 1]) <= 90 else ""
+            rest = m.group(3).strip() or nxt
+            if rest and rest != nxt and nxt and WRAPPED.search(rest):
+                rest = f"{rest} {nxt}"  # a title wrapped onto a second line ("Receptors and" / "Transduction")
             found.append((i + 1, f"{m.group(1).title()} {m.group(2)}{': ' + rest if rest else ''}"[:200]))
     # Ignore repeats (running headers) by keeping the first page for each title.
     seen, starts = set(), []
