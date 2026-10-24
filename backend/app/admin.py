@@ -1,6 +1,6 @@
 """Admin tasks run on the server: `python -m app.admin grant-internal EMAIL`.
 
-Marks an existing Cognito user as the internal QA account (plan=internal, no usage limits).
+Marks an existing Cognito user as internal (plan=internal, no usage limits): the QA account or a trusted tester.
 The Cognito user and its password are created separately with admin credentials (see deploy/create-test-user.sh).
 """
 import sys
@@ -16,11 +16,12 @@ def grant_internal(email: str) -> None:
     Base.metadata.create_all(engine)
     attrs = cognito().admin_get_user(UserPoolId=settings.user_pool_id, Username=email)["UserAttributes"]
     sub = next(a["Value"] for a in attrs if a["Name"] == "sub")
+    name = next((a["Value"] for a in attrs if a["Name"] == "name"), None) or email.split("@")[0]
     with SessionLocal() as db:
         seed_plans(db)
         user = db.query(User).filter_by(cognito_sub=sub).one_or_none()
         if user is None:
-            user = User(cognito_sub=sub, email=email, name="Lectern QA")
+            user = User(cognito_sub=sub, email=email, name=name)
             db.add(user)
         user.plan_id, user.limits_exempt = "internal", True
         db.commit()
